@@ -1,16 +1,28 @@
 import { createRouter, createWebHistory } from '@ionic/vue-router';
 import { RouteRecordRaw } from 'vue-router';
 import HomePage from '../views/HomePage.vue'
+import DestinationPickerPage from '../views/DestinationPickerPage.vue'
+import ARNavigationPage from '../views/ARNavigationPage.vue'
 
 const routes: Array<RouteRecordRaw> = [
   {
     path: '/',
-    redirect: '/home'
+    redirect: '/destinations'
   },
   {
     path: '/home',
     name: 'Home',
     component: HomePage
+  },
+  {
+    path: '/destinations',
+    name: 'Destinations',
+    component: DestinationPickerPage
+  },
+  {
+    path: '/ar-navigation',
+    name: 'ARNavigation',
+    component: ARNavigationPage
   }
 ]
 
