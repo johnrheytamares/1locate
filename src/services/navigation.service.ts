@@ -14,15 +14,33 @@ export const CALIBRATION_INSTRUCTION = 'Point your phone toward the path and tap
 let selectedDestinationId: string | null = null;
 
 function cloneDestination(destination: Destination): Destination {
-  return {
+  const copy: Destination = {
     ...destination,
     outdoorTarget: { ...destination.outdoorTarget },
     indoorRoute: destination.indoorRoute.map((step) => ({ ...step })),
   };
+  if (destination.details) {
+    copy.details = {
+      ...destination.details,
+      images: destination.details.images.map((image) => ({ ...image })),
+    };
+  }
+  return copy;
+}
+
+/** Bundled data until Supabase data is loaded. */
+let catalog: Destination[] = DESTINATIONS.map(cloneDestination);
+
+/** Replaces the destination list, for example with validated Supabase rows. */
+export function setDestinationCatalog(destinations: Destination[]) {
+  catalog = destinations.map(cloneDestination);
+  if (selectedDestinationId != null && !catalog.some((item) => item.id === selectedDestinationId)) {
+    selectedDestinationId = null;
+  }
 }
 
 function findDestination(id: string): Destination | null {
-  return DESTINATIONS.find((destination) => destination.id === id) ?? null;
+  return catalog.find((destination) => destination.id === id) ?? null;
 }
 
 function snapshotFrom(destination: Destination): NavigationSnapshot {
@@ -38,7 +56,13 @@ function snapshotFrom(destination: Destination): NavigationSnapshot {
 }
 
 export function getDestinations(): Destination[] {
-  return DESTINATIONS.map(cloneDestination);
+  return catalog.map(cloneDestination);
+}
+
+/** Looks up a destination for display without selecting it. */
+export function getDestination(id: string): Destination | null {
+  const destination = findDestination(id);
+  return destination ? cloneDestination(destination) : null;
 }
 
 export function indoorRouteMeters(destination: Destination): number {
@@ -65,8 +89,8 @@ export function loadSelectedRoute(): NavigationSnapshot | null {
 
 /** Starts the Registrar indoor route without changing the picker's selection. */
 export function createTestNavigation(): NavigationSnapshot {
-  const destination = findDestination('registrar');
-  return snapshotFrom(destination as Destination);
+  const destination = DESTINATIONS.find((item) => item.id === 'registrar') ?? DESTINATIONS[0];
+  return snapshotFrom(destination);
 }
 
 /** Save the direction the phone is facing as the path's forward direction. */

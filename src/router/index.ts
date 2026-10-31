@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from '@ionic/vue-router';
 import { RouteRecordRaw } from 'vue-router';
 import HomePage from '../views/HomePage.vue'
 import DestinationPickerPage from '../views/DestinationPickerPage.vue'
+import ConfirmDestinationPage from '../views/ConfirmDestinationPage.vue'
 import ARNavigationPage from '../views/ARNavigationPage.vue'
 
 const routes: Array<RouteRecordRaw> = [
@@ -18,6 +19,11 @@ const routes: Array<RouteRecordRaw> = [
     path: '/destinations',
     name: 'Destinations',
     component: DestinationPickerPage
+  },
+  {
+    path: '/destinations/:id',
+    name: 'ConfirmDestination',
+    component: ConfirmDestinationPage
   },
   {
     path: '/ar-navigation',

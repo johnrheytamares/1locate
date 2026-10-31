@@ -20,14 +20,27 @@
     </ion-header>
 
     <ion-content class="picker-content">
+      <div class="source-row">
+        <p class="source" :class="{ live: isLive }" data-test="source">{{ sourceLabel }}</p>
+        <ion-button
+          v-if="failed"
+          size="small"
+          fill="clear"
+          :disabled="loading"
+          data-test="retry"
+          @click="load"
+        >
+          {{ loading ? 'Retrying...' : 'Retry' }}
+        </ion-button>
+      </div>
       <p v-if="filtered.length === 0" class="empty">No destinations match that search.</p>
       <article v-for="destination in filtered" :key="destination.id" class="card">
         <h2>{{ destination.name }}</h2>
         <p>{{ destination.building }}</p>
         <p class="meta">
-          {{ destination.type }} · GPS to {{ destination.outdoorTarget.name }} · {{ indoorRouteMeters(destination) }} m indoors
+          {{ destinationTypeLabel(destination.type) }} · GPS to {{ destination.outdoorTarget.name }} · {{ indoorRouteMeters(destination) }} m indoors
         </p>
-        <ion-button @click="onNavigate(destination.id)">Navigate</ion-button>
+        <ion-button @click="onSelect(destination.id)">Select</ion-button>
       </article>
     </ion-content>
   </ion-page>
@@ -44,27 +57,33 @@ import {
   IonPage,
   IonSearchbar,
   IonToolbar,
+  onIonViewWillEnter,
   useIonRouter,
 } from '@ionic/vue';
-import { getDestinations, indoorRouteMeters, selectDestination } from '@/services/navigation.service';
+import { useDestinationCatalog } from '@/composables/useDestinationCatalog';
+import { destinationTypeLabel } from '@/services/destination-details.service';
+import { indoorRouteMeters } from '@/services/navigation.service';
 
 const ionRouter = useIonRouter();
 const query = ref('');
-const destinations = getDestinations();
+const { destinations, failed, loading, isLive, sourceLabel, load } = useDestinationCatalog();
+
+onIonViewWillEnter(() => {
+  void load();
+});
 
 const filtered = computed(() => {
   const needle = query.value.trim().toLowerCase();
-  if (!needle) return destinations;
-  return destinations.filter((destination) => (
+  if (!needle) return destinations.value;
+  return destinations.value.filter((destination) => (
     destination.name.toLowerCase().includes(needle)
     || destination.building.toLowerCase().includes(needle)
     || destination.type.toLowerCase().includes(needle)
   ));
 });
 
-function onNavigate(id: string) {
-  if (!selectDestination(id)) return;
-  ionRouter.push('/ar-navigation');
+function onSelect(id: string) {
+  ionRouter.push(`/destinations/${encodeURIComponent(id)}`);
 }
 </script>
 
@@ -103,6 +122,25 @@ function onNavigate(id: string) {
 .empty,
 .card {
   margin: 16px;
+}
+
+.source-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  margin: 12px 16px 0;
+}
+
+.source {
+  margin: 0;
+  color: #35586d;
+  font-size: 12px;
+  text-align: right;
+}
+
+.source.live {
+  color: #1493c7;
 }
 
 .empty {

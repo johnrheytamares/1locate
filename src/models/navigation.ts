@@ -1,3 +1,5 @@
+import type { DestinationDetails } from '@/models/campus';
+
 export type RouteDirection = 'straight' | 'left' | 'right';
 
 export type NavigationMode = 'outdoor' | 'indoor';
@@ -31,6 +33,8 @@ export interface Destination {
   type: string;
   outdoorTarget: OutdoorTarget;
   indoorRoute: RouteStep[];
+  /** Present when the destination came from the campus catalog. */
+  details?: DestinationDetails;
 }
 
 export interface NavigationSnapshot {
