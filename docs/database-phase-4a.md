@@ -139,7 +139,7 @@ The first Admin cannot be created from the app. Do it once from the Dashboard:
 4. Check that exactly one row was inserted:
    `select user_id, role from public.user_roles;`
 5. Further Editors and Admins are granted from Role Management in the admin web app
-   (`../1locate-admin`, see its README).
+   (`admin/`, see `admin/README.md`).
 
 Key handling:
 
