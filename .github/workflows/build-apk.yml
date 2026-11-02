@@ -6,6 +6,7 @@ on:
       - main
     paths-ignore:
       - 'admin/**'
+      - '.github/workflows/build-admin-apk.yml'
       - 'docs/**'
       - 'supabase/**'
       - '**/*.md'
