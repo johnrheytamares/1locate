@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">1Locate Admin</string>
+    <string name="title_activity_main">1Locate Admin</string>
+    <string name="package_name">com.onelocate.admin</string>
+    <string name="custom_url_scheme">com.onelocate.admin</string>
+</resources>

@@ -2,8 +2,7 @@
   <div>
     <header class="page-header catalog-head">
       <div class="title-row">
-        <span class="page-mark" aria-hidden="true">
-          <svg viewBox="0 0 24 24"><path fill="currentColor" d="M3 11 12 4l9 7v9h-6v-6H9v6H3v-9z"/></svg>
+        <span class="page-mark" aria-hidden="true"><img class="page-brand-logo" src="/images/1locate-logo.png" alt="" />
         </span>
         <div>
           <h1>Rooms Management</h1>

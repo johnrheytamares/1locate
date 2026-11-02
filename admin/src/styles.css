@@ -469,3 +469,7 @@ button.icon-btn svg { width: 16px; height: 16px; }
   tr:last-child td { border-bottom: 1px solid var(--line); }
   tbody tr td:last-child { border-bottom: none; }
 }
+
+.page-mark:has(.page-brand-logo) { background: transparent; }
+.page-brand-logo { width: 30px; height: 36px; object-fit: contain; }
+.login-brand-logo { display: block; width: 64px; height: 76px; object-fit: contain; margin: 0 auto 12px; }

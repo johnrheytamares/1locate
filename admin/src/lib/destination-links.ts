@@ -6,15 +6,16 @@ export interface RouteSummary {
   valid: boolean;
 }
 
-/** Reads the fixed indoor route for display only. It is never edited here. */
+/** Reads the fixed indoor route for display. */
 export function routeSummary(route: DestinationRecord['indoor_route']): RouteSummary {
-  if (!Array.isArray(route) || route.length === 0) return { steps: 0, meters: 0, valid: false };
+  if (!Array.isArray(route) || route.length === 0 || route.length > 50) return { steps: 0, meters: 0, valid: false };
   let meters = 0;
   let valid = true;
   for (const step of route) {
     const distance = step?.distance;
-    if (typeof distance === 'number' && Number.isFinite(distance) && distance > 0) meters += distance;
+    if (typeof distance === 'number' && Number.isFinite(distance) && distance > 0 && distance <= 500) meters += distance;
     else valid = false;
+    if (!['straight', 'left', 'right'].includes(String(step?.direction))) valid = false;
   }
   return { steps: route.length, meters: Math.round(meters * 10) / 10, valid };
 }

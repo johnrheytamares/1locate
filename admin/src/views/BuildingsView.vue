@@ -2,8 +2,7 @@
   <div>
     <header class="page-header buildings-head">
       <div class="title-row">
-        <span class="page-mark" aria-hidden="true">
-          <svg viewBox="0 0 24 24"><path fill="currentColor" d="M4 21V5l8-2 8 2v16h-6v-5H10v5H4zm4-9h2V9H8v3zm6 0h2V9h-2v3z"/></svg>
+        <span class="page-mark" aria-hidden="true"><img class="page-brand-logo" src="/images/1locate-logo.png" alt="" />
         </span>
         <div>
           <h1>Buildings Management</h1>

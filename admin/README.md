@@ -93,7 +93,90 @@ role takes effect on the next page change. Signing out, or losing the session, c
   storage path.
 - **Destination links:** a destination keeps its existing fixed indoor route and can be linked to one
   room (one destination per room). New rooms without a destination show
-  "Not yet available for navigation". Routes are not created here.
+  "Not yet available for navigation" until a destination is created. Use Add Destination to create
+  its fixed route, or Edit / Record route to change an existing route. Route saves turn the destination off.
+
+## Destination creation status (2026-11-02)
+
+The Destinations page now supports Add Destination, room linking, route editing, and foreground
+motion recording on supported phones. Creating a room still does not automatically create a
+destination. Routes require 1–50 segments, each above 0 and at most 500 meters.
+
+Available workflow:
+
+1. Create the building, floor, and room using the existing content pages.
+2. Choose **Add Destination** for a room without a destination. Select the room; its building,
+   name, type, and entrance details come from existing records. Set the building entrance name first.
+3. Enter a surveyed fixed route from that building entrance to the room using ordered segments
+   (straight, left, or right, with distance in meters). Do not invent route lengths or coordinates.
+4. Save the destination as inactive while preparing it. Validate its unique ID, room association,
+   required fallback fields, and route using rules compatible with the mobile loader.
+5. Verify the route on site before activation. The linked room and building must also be published
+   for the destination to appear through the campus catalog.
+
+The destination creation service and validated editor use the existing RLS policies and unique
+room-link index. Live Editor/Admin access must be verified separately. Automatic path generation,
+stairs, elevators, and routing across floors are not supported by this route model.
+
+### Recording on a phone
+
+Confirm you are at the named entrance facing the first corridor. Calibrate meters per walking
+step using a measured distance and counted steps. Start recording, hold the phone steadily, and
+mark each turn at the corner. A turn applies to the segment after that corner. Checkpoint splits
+the route without changing direction. Pause/Resume, Finish, and Cancel are available; Cancel
+restores the route that was in the editor before recording started. Starting a fresh recording
+replaces the editor segments; Cancel restores them.
+
+The recorder uses browser DeviceMotion/DeviceOrientation APIs, also inside the Capacitor WebView.
+The official Motion plugin uses these same Web APIs, so no extra sensor dependency is installed.
+It estimates distance from acceleration peaks and calibrated step length; heading changes are
+displayed for reference, while turns are manually marked. It is not precise indoor positioning or
+a native step counter. It requires sensor support and a secure context (HTTPS on a hosted website).
+Denied permissions, missing sensors, or absent motion samples leave manual editing available.
+Backgrounding pauses recording; return to the same position and facing before resuming. Review
+and correct all segments after finishing. Save as inactive draft, verify on site, then turn on.
+
+Unsaved drafts are kept per user/destination in sessionStorage for this tab and recovered when
+the editor reopens. They include the current estimated segment; recording never resumes automatically.
+Sign-out clears the open editor's recovery draft. Disabled/full storage means recovery is unavailable;
+failed network saves keep the form in memory. This is not durable offline synchronization.
+
+### Android admin
+
+The generated native project is `admin/android`, with application ID `com.onelocate.admin`.
+Capacitor 8.5.3 matches the companion mobile app. Keep `admin/.env` configured with public
+Supabase settings before building. Use the same Admin/Editor login as the website.
+
+```powershell
+cd admin
+npm install
+npm run android:sync
+npm run android:open
+# Or deploy to a connected device/emulator:
+npm run android:run
+```
+
+Android builds require the Capacitor 8 Android toolchain, Android SDK, and Java. No location or
+activity-recognition permission is requested: this implementation uses foreground WebView motion
+events, with runtime permission prompts where the browser requires them. Sensor delivery and
+authentication persistence still need testing on a physical Android device.
+
+Dependency references: [Capacitor Android](https://capacitorjs.com/docs/android),
+[Motion API](https://next.capacitorjs.com/docs/apis/motion), and
+[Capacitor MIT license](https://github.com/ionic-team/capacitor/blob/main/LICENSE).
+
+### Verification for this implementation
+
+- Admin production build and type checking passed.
+- All 105 tests passed, including route limits, duplicate/permission errors, draft saves,
+  failed-save retention, and missing sensor samples/listener cleanup.
+- ESLint completed with 0 errors and 59 existing interface warnings.
+- Android platform generation and asset sync passed.
+- Runtime dependency audit (`npm audit --omit=dev`) reported 0 vulnerabilities. The full install
+  reported 25 development dependency advisories (18 moderate, 6 high, 1 critical); these remain unresolved.
+- APK compilation could not proceed: Java was not on PATH and JAVA_HOME was unset. Android
+  Studio's default bundled Java path was also absent. No APK or physical-device test is claimed.
+- Live Supabase role checks and real route accuracy were not verified, and no live migrations were run.
 
 ## Live access checks
 

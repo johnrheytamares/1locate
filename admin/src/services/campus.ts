@@ -6,6 +6,14 @@ import type { AppRole, Building, DestinationRecord, Floor, MapLabel, Room, UserR
 
 type Client = SupabaseClient | null;
 
+export function createDestination(payload: ReturnType<typeof import('@/lib/route-editor').destinationPayload>, client: Client = supabase): Promise<DestinationRecord> {
+  return changed(requireClient(client).from('destinations').insert({ ...payload, is_active: false }).select(DESTINATION_COLUMNS));
+}
+
+export function saveDestinationRoute(id: string, route: import('@/lib/route-editor').SavedStep[], client: Client = supabase): Promise<DestinationRecord> {
+  return changed(requireClient(client).from('destinations').update({ indoor_route: route, is_active: false }).eq('id', id).select(DESTINATION_COLUMNS));
+}
+
 const BUILDING_COLUMNS = 'id, code, name, description, entrance_name, entrance_lat, entrance_lng, arrival_radius, is_active, sort_order, created_at, updated_at';
 const FLOOR_COLUMNS = 'id, building_id, level, name, created_at, updated_at';
 const ROOM_COLUMNS = 'id, building_id, floor_id, name, room_number, type, description, is_active, sort_order, created_at, updated_at';

@@ -44,7 +44,7 @@ export function createSessionStore(client: SupabaseClient | null, now: () => num
     roleInFlightUser = userId;
     state.roleError = null;
     roleCheckedAt = now();
-    const pending = (async () => {
+    const pending = Promise.resolve().then(async () => {
       try {
         const role = await getOwnRole(userId, client);
         if (request === roleRequest && state.userId === userId) state.role = role;
@@ -59,7 +59,7 @@ export function createSessionStore(client: SupabaseClient | null, now: () => num
           roleInFlightUser = null;
         }
       }
-    })();
+    });
     roleInFlight = pending;
     return pending;
   }

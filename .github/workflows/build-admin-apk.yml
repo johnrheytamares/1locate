@@ -1,0 +1,105 @@
+name: Build 1Locate Admin Android APK
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'admin/**'
+      - '.github/workflows/build-admin-apk.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-admin-apk:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: admin
+
+    env:
+      VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+      VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+
+    steps:
+      # 1. Get the source code
+      - name: Checkout project
+        uses: actions/checkout@v4
+
+      # 2. Stop early if the Supabase secrets are missing or privileged
+      - name: Check Supabase secrets
+        run: |
+          if [ -z "$VITE_SUPABASE_URL" ] || [ -z "$VITE_SUPABASE_ANON_KEY" ]; then
+            echo "::error::Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+          case "$VITE_SUPABASE_ANON_KEY" in
+            sb_secret_*)
+              echo "::error::VITE_SUPABASE_ANON_KEY is a secret key. Use the anon/publishable key."
+              exit 1
+              ;;
+          esac
+          echo "Supabase secrets are set."
+
+      # 3. Install Node.js (cache uses the admin lockfile)
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: admin/package-lock.json
+
+      # 4. Install admin dependencies
+      - name: Install npm dependencies
+        run: npm ci
+
+      # 5. Lint and tests
+      - name: Lint
+        run: npm run lint
+
+      - name: Tests
+        run: npm run test
+
+      # 6. Build the admin web app
+      - name: Build admin application
+        run: npm run build
+
+      # 7. Install Java 21 and cache Gradle downloads
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+          cache: 'gradle'
+          cache-dependency-path: |
+            admin/android/*.gradle*
+            admin/android/**/gradle-wrapper.properties
+
+      # 8. Copy the web build into the admin Android project
+      - name: Sync Capacitor Android
+        run: npx cap sync android
+
+      # 9. gradlew is committed from Windows without the executable bit
+      - name: Make Gradle executable
+        run: chmod +x android/gradlew
+
+      # 10. Build debug APK
+      - name: Build Android APK
+        working-directory: admin/android
+        run: ./gradlew assembleDebug --no-daemon
+
+      # 11. Rename the generated APK
+      - name: Rename APK
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk ../1Locate-Admin-debug.apk
+
+      # 12. Upload APK to GitHub Actions
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: 1Locate-Admin-APK
+          path: 1Locate-Admin-debug.apk
+          if-no-files-found: error
+          retention-days: 30

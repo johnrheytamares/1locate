@@ -3,9 +3,7 @@
     <button v-if="menuOpen" class="scrim" type="button" aria-label="Close navigation" @click="menuOpen = false"></button>
     <nav class="sidebar" :class="{ open: menuOpen }" aria-label="Main">
       <div class="brand">
-        <span class="mark" aria-hidden="true">
-          <svg viewBox="0 0 32 32"><path fill="#fff" d="M16 3c-5.2 0-9.5 4.1-9.5 9.2 0 6.8 9.5 16.8 9.5 16.8s9.5-10 9.5-16.8C25.5 7.1 21.2 3 16 3zm0 12.4a3.2 3.2 0 1 1 0-6.4 3.2 3.2 0 0 1 0 6.4z" /></svg>
-        </span>
+        <img class="admin-brand-logo" src="/images/1locate-logo.png" alt="" />
         <div>
           <strong>1Locate Admin</strong>
           <small>Campus Navigation Management</small>
@@ -308,4 +306,5 @@ button.menu:active:not(:disabled) {
   }
   .content, .topbar { padding-left: 14px; padding-right: 14px; }
 }
+.admin-brand-logo { width: 36px; height: 42px; object-fit: contain; flex: 0 0 auto; }
 </style>

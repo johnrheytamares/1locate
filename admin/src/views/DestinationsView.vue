@@ -2,12 +2,11 @@
   <div>
     <header class="page-header catalog-head dest-head">
       <div class="title-row">
-        <span class="page-mark" aria-hidden="true">
-          <svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 14.5 9 2.5 2.5 0 0 1 12 11.5z"/></svg>
+        <span class="page-mark" aria-hidden="true"><img class="page-brand-logo" src="/images/1locate-logo.png" alt="" />
         </span>
         <div>
           <h1>Destinations Management</h1>
-          <p>Link each destination to a room. Routes are not changed here.</p>
+          <p>Create destinations, review fixed routes, and link rooms.</p>
         </div>
       </div>
     </header>
@@ -23,6 +22,11 @@
     <p v-if="error" class="notice error" role="alert" data-test="page-error">{{ error }}</p>
     <p v-if="notice" class="notice ok" data-test="page-notice">{{ notice }}</p>
 
+    <div class="create-bar">
+    <button type="button" :disabled="!!addDisabledReason" :aria-describedby="addDisabledReason ? 'add-destination-help' : undefined" @click="openEditor()">Add Destination</button>
+    <p v-if="addDisabledReason" id="add-destination-help" class="muted">{{ addDisabledReason }} <router-link v-if="!loading && !error && !editor && rooms.length === 0" :to="{ name: 'rooms' }">Open Rooms</router-link></p>
+    </div>
+    <DestinationEditor v-if="editor" :rooms="editor.destination ? rooms : unlinked" :buildings="buildingList" :destination="editor.destination" :initial-room="editor.roomId" @close="editor = null" @saved="onSaved" />
     <p v-if="loading" class="muted">Loading destinations...</p>
     <template v-else>
       <section class="card dest-panel">
@@ -39,53 +43,16 @@
           </select>
         </div>
       <div v-if="filteredDestinations.length === 0" class="table-wrap"><p class="empty">No destinations found.</p></div>
-      <div v-else class="table-wrap data-table">
+      <div v-else class="table-wrap data-table destination-table">
         <table>
           <thead>
-            <tr><th>Destination</th><th>Fixed Route</th><th>Linked Room</th><th>Mobile App Status</th><th>Actions</th></tr>
+            <tr><th class="actions-heading">Actions</th><th>Destination</th><th>Fixed Route</th><th>Linked Room</th><th>Mobile App Status</th></tr>
           </thead>
           <tbody>
-            <tr v-for="destination in filteredDestinations" :key="destination.id" data-test="destination-row">
-              <td data-label="Destination">
-                <div class="with-icon">
-                  <span class="row-icon blue" aria-hidden="true">
-                    <svg viewBox="0 0 24 24"><path fill="currentColor" d="M4 21V5l8-2 8 2v16h-6v-5H10v5H4z"/></svg>
-                  </span>
-                  <div>
-                    <strong class="name-cell">{{ destination.name }}</strong>
-                    <span class="muted sub">{{ destination.building }} · {{ destination.id }}</span>
-                  </div>
-                </div>
-              </td>
-              <td data-label="Fixed Route">
-                <span v-if="routes.get(destination.id)?.valid" class="route">
-                  <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M7 4h2v6h6V8l5 4-5 4v-2H7v6H5V4h2z"/></svg>
-                  {{ routes.get(destination.id)?.steps }} steps · {{ routes.get(destination.id)?.meters }} m
-                </span>
-                <span v-else class="badge warn">Route needs checking</span>
-              </td>
-              <td data-label="Linked Room">
-                <select
-                  v-model="selection[destination.id]"
-                  :aria-label="`Room for ${destination.name}`"
-                  :disabled="busyId !== null"
-                  data-test="room-select"
-                >
-                  <option value="">Not linked</option>
-                  <option v-for="room in linkableRooms(rooms, destinations, destination.id)" :key="room.id" :value="room.id">
-                    {{ roomLabel(room) }}
-                  </option>
-                </select>
-              </td>
-              <td data-label="Mobile App Status">
-                <span class="badge" :class="isVisible(visibility(destination)) ? 'ok' : 'warn'" data-test="visibility">
-                  <svg v-if="isVisible(visibility(destination))" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 6.5c-5 0-8.3 4.2-9.2 5.5.9 1.3 4.2 5.5 9.2 5.5s8.3-4.2 9.2-5.5c-.9-1.3-4.2-5.5-9.2-5.5zm0 9a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"/></svg>
-                  <svg v-else viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 6.5c-5 0-8.3 4.2-9.2 5.5.9 1.3 4.2 5.5 9.2 5.5s8.3-4.2 9.2-5.5c-.9-1.3-4.2-5.5-9.2-5.5zm0 9a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"/><path stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M5 6l14 13"/></svg>
-                  {{ isVisible(visibility(destination)) ? 'Shown' : 'Hidden' }}
-                </span>
-              </td>
+            <tr v-for="destination in filteredDestinations" :key="destination.id" :class="{ expanded: expandedDestinations.has(destination.id) }" data-test="destination-row">
               <td class="actions" data-label="Actions">
                 <div class="action-row">
+                <button type="button" class="secondary small" :disabled="busyId !== null || !!editor" @click="openEditor(destination)">Edit / Record route</button>
                 <button
                   class="secondary small"
                   type="button"
@@ -103,6 +70,52 @@
                 </button>
                 </div>
               </td>
+              <td data-label="Destination">
+                <div class="with-icon">
+                  <span class="row-icon blue" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><path fill="currentColor" d="M4 21V5l8-2 8 2v16h-6v-5H10v5H4z"/></svg>
+                  </span>
+                  <div>
+                    <strong class="name-cell desktop-destination-name">{{ destination.name }}</strong>
+                    <button class="destination-toggle" type="button" :aria-expanded="expandedDestinations.has(destination.id)" @click="toggleDestination(destination.id)">
+                      <span>{{ destination.name }}</span>
+                      <span class="expand-chevron" aria-hidden="true">⌄</span>
+                    </button>
+                    <span class="muted sub">{{ destination.building }} · {{ destination.id }}</span>
+                  </div>
+                </div>
+              </td>
+              <td data-label="Fixed Route">
+                <span v-if="routes.get(destination.id)?.valid" class="route">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M7 4h2v6h6V8l5 4-5 4v-2H7v6H5V4h2z"/></svg>
+                  {{ routes.get(destination.id)?.steps }} steps · {{ routes.get(destination.id)?.meters }} m
+                </span>
+                <span v-else class="badge warn">Route needs checking</span>
+              </td>
+              <td data-label="Linked Room" class="linked-room-cell">
+                <div class="room-select-field">
+                <select
+                  v-model="selection[destination.id]"
+                  :aria-label="`Room for ${destination.name}`"
+                  :disabled="busyId !== null"
+                  data-test="room-select"
+                >
+                  <option value="">Not linked</option>
+                  <option v-for="room in linkableRooms(rooms, destinations, destination.id)" :key="room.id" :value="room.id">
+                    {{ roomLabel(room) }}
+                  </option>
+                </select>
+                <svg class="room-select-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" /></svg>
+                </div>
+              </td>
+              <td data-label="Mobile App Status">
+                <span class="badge" :class="isVisible(visibility(destination)) ? 'ok' : 'warn'" data-test="visibility">
+                  <svg v-if="isVisible(visibility(destination))" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 6.5c-5 0-8.3 4.2-9.2 5.5.9 1.3 4.2 5.5 9.2 5.5s8.3-4.2 9.2-5.5c-.9-1.3-4.2-5.5-9.2-5.5zm0 9a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"/></svg>
+                  <svg v-else viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 6.5c-5 0-8.3 4.2-9.2 5.5.9 1.3 4.2 5.5 9.2 5.5s8.3-4.2 9.2-5.5c-.9-1.3-4.2-5.5-9.2-5.5zm0 9a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"/><path stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M5 6l14 13"/></svg>
+                  {{ isVisible(visibility(destination)) ? 'Shown' : 'Hidden' }}
+                </span>
+              </td>
+
             </tr>
           </tbody>
         </table>
@@ -143,7 +156,7 @@
                   </div>
                 </td>
                 <td><span class="badge" :class="room.is_active ? 'ok' : 'off'">{{ room.is_active ? 'Published' : 'Draft' }}</span></td>
-                <td><span class="badge warn">Not yet available for navigation</span></td>
+                <td><button type="button" :disabled="!!editor || busyId !== null" @click="openEditor(undefined, room.id)">Add Destination</button></td>
               </tr>
             </tbody>
           </table>
@@ -155,6 +168,8 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue';
+import DestinationEditor from '@/components/DestinationEditor.vue';
+import { validatedRoute } from '@/lib/route-editor';
 import {
   isVisible,
   linkableRooms,
@@ -176,7 +191,22 @@ const loading = ref(true);
 const busyId = ref<string | null>(null);
 const error = ref('');
 const notice = ref('');
+const editor = ref<{ destination?: DestinationRecord; roomId?: string } | null>(null);
+function openEditor(destination?: DestinationRecord, roomId?: string) { editor.value = { destination, roomId }; }
+function onSaved(saved: DestinationRecord) {
+  if (destinations.value.some(d => d.id === saved.id)) replace(saved);
+  else { destinations.value.push(saved); selection[saved.id] = saved.room_id ?? ''; }
+  editor.value = null;
+  notice.value = 'Saved as an inactive draft. Verify the actual route before turning it on.';
+}
 const search = ref('');
+const expandedDestinations = ref(new Set<string>());
+function toggleDestination(id: string) {
+  const next = new Set(expandedDestinations.value);
+  if (next.has(id)) next.delete(id);
+  else next.add(id);
+  expandedDestinations.value = next;
+}
 const statusFilter = ref('');
 const hiddenNames = computed(() => {
   const names = destinations.value.filter((item) => !item.is_active).map((item) => item.name);
@@ -197,6 +227,15 @@ const buildings = computed(() => new Map(buildingList.value.map((item) => [item.
 const roomMap = computed(() => new Map(rooms.value.map((item) => [item.id, item])));
 const routes = computed(() => new Map(destinations.value.map((item) => [item.id, routeSummary(item.indoor_route)])));
 const unlinked = computed(() => roomsWithoutDestination(rooms.value, destinations.value));
+const addDisabledReason = computed(() => {
+  if (loading.value) return 'Wait for campus records to finish loading.';
+  if (error.value && rooms.value.length === 0) return 'Campus records could not be loaded. Resolve the error above and reload this page.';
+  if (busyId.value !== null) return 'Wait for the current destination change to finish.';
+  if (editor.value) return 'A destination editor is already open below. Save or close it before adding another destination.';
+  if (rooms.value.length === 0) return 'Add a room first. Each new destination must be linked to an existing room.';
+  if (unlinked.value.length === 0) return 'Every room already has a destination. Add another room, or use Edit / Record route for an existing destination.';
+  return '';
+});
 
 function visibility(destination: DestinationRecord): MobileVisibility {
   return mobileVisibility(destination, roomMap.value, buildings.value);
@@ -252,6 +291,12 @@ async function onSaveLink(destination: DestinationRecord) {
 }
 
 async function onToggleActive(destination: DestinationRecord) {
+  if (!destination.is_active) {
+    try {
+      validatedRoute((destination.indoor_route ?? []).map(s => ({ direction: String(s.direction), distance: Number(s.distance) })));
+    } catch (err) { error.value = (err as Error).message; return; }
+    if (!window.confirm('Have you verified this route on site? Turning it on requires a published linked room and building for catalog visibility.')) return;
+  }
   error.value = '';
   notice.value = '';
   busyId.value = destination.id;
@@ -316,5 +361,113 @@ onMounted(load);
   .dest-summary { flex-direction: column; gap: 8px; }
   .dest-count, .dest-hidden { min-width: 0; width: 100%; }
   .dest-count.card { padding: 12px 14px; }
+}
+.dest-head .title-row > div { display: block; }
+.dest-head h1 { margin-bottom: 5px; }
+.dest-summary { align-items: center; }
+.dest-count.card { padding: 16px; min-width: 190px; }
+.dest-hidden { background: #fff8e8; border-color: #f1dfb6; color: #886019; font-size: 12px; line-height: 1.6; padding: 12px 16px; overflow-wrap: anywhere; }
+.create-bar { display: flex; align-items: center; gap: 16px; margin: 16px 0; }
+.create-bar > button { flex: 0 0 auto; min-height: 44px; font-size: 13px; }
+.create-bar > p { margin: 0; max-width: 660px; font-size: 12px; line-height: 1.6; }
+.dest-panel { padding: 20px; border-radius: 16px; }
+.panel-bar { display: grid; grid-template-columns: minmax(160px, 1fr) minmax(180px, 360px) 110px; gap: 12px; margin-bottom: 18px; }
+.panel-bar h2 { font-size: 16px; }
+.panel-bar .search-field { width: 100%; margin: 0; }
+.panel-bar select { width: 100%; min-width: 0; }
+.destination-table { overflow-x: auto; border-radius: 10px; box-shadow: none; }
+.destination-table table { min-width: 900px; }
+.destination-table th { background: #f1f5fa; border-color: #e3eaf3; color: #687d95; font-size: 10px; letter-spacing: .06em; padding: 12px; }
+.destination-table td { padding: 15px 12px; font-size: 13px; }
+.destination-table .sub { font-size: 11px; margin-top: 4px; color: #7d8da2; overflow-wrap: anywhere; }
+.destination-table .name-cell { font-size: 14px; }
+.destination-table .row-icon { width: 34px; height: 34px; border-radius: 10px; }
+.destination-table td select { width: 100%; min-height: 40px; max-width: 240px; }
+.action-row { flex-wrap: wrap; }
+.action-row button { min-height: 38px; font-size: 11px; }
+.action-row button:first-child { background: #edf4ff; border-color: #d8e6fc; color: #215ec0; }
+@media (max-width: 1100px) {
+  .panel-bar { grid-template-columns: minmax(0, 1fr) 110px; }
+  .panel-bar h2 { grid-column: 1 / -1; }
+}
+@media (max-width: 640px) {
+  .dest-head { margin-bottom: 16px; }
+  .dest-head h1 { font-size: 18px; }
+  .dest-head p { line-height: 1.5; }
+  .dest-summary { display: grid; grid-template-columns: 1fr; gap: 10px; }
+  .dest-count.card { border-radius: 12px; }
+  .dest-hidden { min-width: 0; padding: 10px 12px; }
+  .create-bar { display: grid; gap: 8px; margin: 14px 0 18px; }
+  .create-bar > button { justify-self: start; }
+  .create-bar > p { font-size: 11px; }
+  .dest-panel { padding: 14px; border-radius: 14px; }
+  .panel-bar { grid-template-columns: minmax(0, 1fr) 86px; gap: 10px; margin-bottom: 14px; }
+  .panel-bar h2 { font-size: 16px; }
+  .panel-bar .search-field { padding: 0 9px; }
+  .panel-bar input, .panel-bar select { font-size: 14px; }
+  .destination-table { overflow: visible; border-radius: 0; }
+  .destination-table table { min-width: 0; }
+  .destination-table tbody { display: grid; gap: 14px; }
+  .destination-table tbody tr { margin: 0; border: 1px solid #dfe7f1; border-radius: 12px; box-shadow: 0 3px 10px #153d7310; }
+  .destination-table td { display: flex; align-items: center; text-align: left; gap: 10px; padding: 12px; border-bottom: 1px solid #edf1f6; }
+  .destination-table td::before { flex: 0 0 88px; font-size: 9px; letter-spacing: .03em; }
+  .destination-table td[data-label="Destination"] { padding: 16px 12px; background: #f8fbff; }
+  .destination-table td[data-label="Destination"]::before { display: none; }
+  .destination-table td[data-label="Destination"] .with-icon { align-items: flex-start; width: 100%; gap: 10px; }
+  .destination-table .with-icon > div { min-width: 0; }
+  .destination-table .name-cell { display: block; font-size: 15px; }
+  .destination-table .sub { line-height: 1.5; }
+  .destination-table .route { font-size: 12px; white-space: normal; }
+  .destination-table td select { min-width: 0; max-width: none; flex: 1; width: 0; font-size: 16px; min-height: 44px; }
+  .dest-panel .destination-table td.actions { display: block; padding: 12px; }
+  .destination-table td.actions::before { display: none; }
+  .action-row { display: grid; grid-template-columns: 1fr 1fr; width: 100%; gap: 8px; }
+  .action-row button { margin: 0; min-width: 0; min-height: 44px; justify-content: center; font-size: 11px; padding: 8px; white-space: normal; }
+  .action-row button:first-child { grid-column: 1 / -1; }
+  .dest-panel > .muted { font-size: 12px; line-height: 1.6; }
+}
+
+.destination-table .actions-heading, .dest-panel .destination-table td.actions { text-align: left; }
+.destination-table .action-row { justify-content: flex-start; }
+@media (max-width: 640px) {
+  .destination-table tbody tr { display: flex; flex-direction: column; }
+  .dest-panel .destination-table td.actions { order: 1; border-top: 1px solid #edf1f6; border-bottom: 0; }
+}
+.create-bar > button { order: 2; margin-left: auto; }
+.create-bar > p { order: 1; }
+.room-select-field { position: relative; min-width: 140px; width: 100%; max-width: 240px; }
+.destination-table .room-select-field select { max-width: none; }
+.room-select-chevron { display: none; }
+.destination-toggle { display: none; }
+@media (max-width: 640px) {
+  .create-bar > button { order: 0; justify-self: end; margin-left: 0; }
+  .create-bar > p { order: 0; }
+  .destination-table td.linked-room-cell { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; padding: 14px 12px; }
+  .destination-table td.linked-room-cell::before { font-size: 10px; color: #5d738d; }
+  .room-select-field { min-width: 0; max-width: none; }
+  .destination-table .room-select-field select {
+    display: block; appearance: none; -webkit-appearance: none;
+    width: 100%; max-width: none; min-height: 48px; height: auto;
+    padding: 12px 42px 12px 14px; margin: 0;
+    border: 1px solid #cbd9ec; border-radius: 10px;
+    background: #fff; color: #163a65; font-size: 16px; font-weight: 500;
+    line-height: 1.4; box-shadow: 0 1px 3px #153d7308;
+  }
+  .destination-table .room-select-field select:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
+  .room-select-chevron { display: block; position: absolute; right: 13px; top: 50%; transform: translateY(-50%); width: 20px; height: 20px; color: #53779e; pointer-events: none; }
+  .destination-table .room-select-field select:disabled { background: #f0f4f9; color: #7a8ca1; opacity: 1; }
+  .destination-table .desktop-destination-name { display: none; }
+  .destination-table td[data-label="Destination"] .with-icon > div { flex: 1; }
+  .destination-table .destination-toggle {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    width: 100%; min-height: 44px; padding: 0; margin: -7px 0 0;
+    background: transparent; border: 0; border-radius: 5px;
+    color: #0f2744; text-align: left; font-size: 15px; font-weight: 700;
+  }
+  .destination-toggle:focus-visible { outline: 2px solid #2563eb; outline-offset: 3px; }
+  .expand-chevron { font-size: 22px; color: #6480a0; transition: transform .15s ease; }
+  .expanded .expand-chevron { transform: rotate(180deg); }
+  .destination-table tbody tr:not(.expanded) > td:not([data-label="Destination"]) { display: none; }
+  .destination-table tbody tr:not(.expanded) > td[data-label="Destination"] { border-bottom: 0; }
 }
 </style>

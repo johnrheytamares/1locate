@@ -2,8 +2,7 @@
   <div>
     <header class="page-header catalog-head">
       <div class="title-row">
-        <span class="page-mark" aria-hidden="true">
-          <svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4zm-7 8v-1c0-2.8 3.1-4.5 7-4.5s7 1.7 7 4.5v1H5z"/></svg>
+        <span class="page-mark" aria-hidden="true"><img class="page-brand-logo" src="/images/1locate-logo.png" alt="" />
         </span>
         <div>
           <h1>Roles Management</h1>

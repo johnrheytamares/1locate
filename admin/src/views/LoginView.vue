@@ -1,7 +1,7 @@
 <template>
   <div class="center-page">
     <form class="card narrow" novalidate data-test="login-form" @submit.prevent="onSubmit">
-      <h1>1Locate Admin</h1>
+      <img class="login-brand-logo" src="/images/1locate-logo.png" alt="1Locate logo" /><h1>1Locate Admin</h1>
       <p class="muted">Sign in with the account an Admin created for you.</p>
       <p v-if="error" class="notice error" role="alert" data-test="login-error">{{ error }}</p>
       <div class="field">
