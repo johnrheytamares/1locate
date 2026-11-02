@@ -9,7 +9,8 @@ import { configDefaults } from 'vitest/config'
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [
-    vue(),
+    // Absolute URLs point at files in public/ and must stay plain URLs; Vitest cannot import them.
+    vue({ template: { transformAssetUrls: { includeAbsolute: false } } }),
     legacy()
   ],
   resolve: {

@@ -89,7 +89,7 @@ describe('Confirm Destination screen', () => {
     expect(wrapper.find('[data-test="floor"]').text()).toBe('Ground Floor');
     expect(wrapper.find('[data-test="room-number"]').text()).toBe('A-101');
     expect(wrapper.find('[data-test="description"]').text()).toContain('transcripts');
-    expect(wrapper.find('img').attributes('src')).toBe('https://example.test/front-desk.jpg');
+    expect(wrapper.find('figure.photo img').attributes('src')).toBe('https://example.test/front-desk.jpg');
     expect(wrapper.find('[data-test="placeholder"]').exists()).toBe(false);
     expect(wrapper.text()).toContain('Live campus data');
     expect(mocks.getDestinationImageUrls).toHaveBeenCalledWith(roomDestination.details!.images);

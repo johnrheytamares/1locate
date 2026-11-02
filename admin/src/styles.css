@@ -473,3 +473,22 @@ button.icon-btn svg { width: 16px; height: 16px; }
 .page-mark:has(.page-brand-logo) { background: transparent; }
 .page-brand-logo { width: 30px; height: 36px; object-fit: contain; }
 .login-brand-logo { display: block; width: 64px; height: 76px; object-fit: contain; margin: 0 auto 12px; }
+
+/* Consistent compact summaries and touch controls across admin phone screens. */
+@media (max-width: 640px) {
+  .content .mini-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; margin-bottom: 12px; }
+  .content .mini-stats .stat.card { flex-direction: column; align-items: flex-start; gap: 7px; padding: 12px 10px; min-width: 0; border-radius: 12px; }
+  .content .mini-stats .stat-icon { width: 28px; height: 28px; border-radius: 8px; flex: 0 0 auto; }
+  .content .mini-stats .stat-icon svg { width: 15px; height: 15px; }
+  .content .mini-stats .stat > div { min-width: 0; }
+  .content .mini-stats strong { font-size: 22px; line-height: 1.2; }
+  .content .mini-stats .stat > div > span { display: block; margin-top: 3px; font-size: 10px; line-height: 1.4; overflow-wrap: anywhere; }
+  .content .mini-stats .stat:only-child { grid-column: 1 / -1; flex-direction: row; align-items: center; padding: 10px 12px; }
+  .content .mini-stats .stat:only-child > div { display: flex; align-items: baseline; gap: 8px; }
+  .content .mini-stats .stat:only-child > div > span { font-size: 11px; }
+  .content .catalog-head p { font-size: 11px; line-height: 1.5; }
+  .content .search-field { height: 44px; padding: 0 10px; }
+  .content .search-field input { width: 100%; font-size: 16px; }
+  .content .data-table td { font-size: 12px; }
+  .content .data-table button.icon-btn { width: 40px; height: 40px; min-height: 40px; flex-basis: 40px; }
+}

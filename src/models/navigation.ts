@@ -48,6 +48,11 @@ export interface NavigationSnapshot {
    * Outdoors the required heading comes from the GPS bearing instead.
    */
   forwardHeading: number | null;
+  /**
+   * Set by "I lost my way". Progress, turns, and calibration are frozen until the user
+   * resumes or restarts from the entrance. The app never guesses the indoor position.
+   */
+  paused: boolean;
 }
 
 /** How far the phone can face away from the step before a turn instruction appears. */

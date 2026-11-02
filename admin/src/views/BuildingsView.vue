@@ -11,7 +11,7 @@
       </div>
     </header>
 
-    <div class="stats">
+    <div class="stats building-stats">
       <article class="stat card tone-blue">
         <span class="stat-icon blue" aria-hidden="true">
           <svg viewBox="0 0 24 24"><path fill="currentColor" d="M4 21V5l8-2 8 2v16h-6v-5H10v5H4z"/></svg>
@@ -97,11 +97,12 @@
       </table>
     </div>
 
-    <div v-if="editing" class="overlay" role="dialog" aria-modal="true" aria-label="Building form">
-      <div class="dialog building-dialog">
+    <div v-if="editing" class="overlay building-overlay" role="dialog" aria-modal="true" aria-label="Building form">
+      <div class="dialog building-dialog" :class="{ 'with-photos': !!editing.id }">
       <form novalidate data-test="building-form" @submit.prevent="onSave">
         <div class="dialog-title">
           <div>
+            <span class="form-eyebrow">CAMPUS MANAGEMENT</span>
             <h2>{{ editing.id ? 'Edit Building' : 'Add Building' }}</h2>
             <p class="muted">{{ editing.id ? 'Update this building.' : 'Add a new building to the campus.' }}</p>
           </div>
@@ -112,6 +113,7 @@
         <p v-if="formError" class="notice error" role="alert" data-test="form-error">{{ formError }}</p>
         <div class="form-split">
         <div class="form-grid">
+          <h3 class="form-section-title">Building details</h3>
           <FormField v-slot="{ id }" name="code" label="Code" :error="errors.code" hint="Example: ADMIN. Letters, numbers, _ or -." required>
             <input :id="id" v-model="form.code" maxlength="20" data-test="code" />
           </FormField>
@@ -121,6 +123,7 @@
           <FormField v-slot="{ id }" name="description" label="Description" :error="errors.description" full>
             <textarea :id="id" v-model="form.description" maxlength="2000" />
           </FormField>
+          <h3 class="form-section-title">Entrance & GPS <span>Use verified coordinates, or leave both blank.</span></h3>
           <FormField v-slot="{ id }" name="entranceName" label="Entrance name" :error="errors.entranceName" hint="Shown as the GPS target, e.g. Main Entrance.">
             <input :id="id" v-model="form.entranceName" maxlength="120" />
           </FormField>
@@ -133,6 +136,7 @@
           <FormField v-slot="{ id }" name="entranceLng" label="Entrance longitude" :error="errors.entranceLng" hint="Leave blank until surveyed.">
             <input :id="id" v-model="form.entranceLng" inputmode="decimal" data-test="lng" />
           </FormField>
+          <h3 class="form-section-title">Publishing</h3>
           <FormField v-slot="{ id }" name="sortOrder" label="Display order" :error="errors.sortOrder">
             <input :id="id" v-model="form.sortOrder" inputmode="numeric" />
           </FormField>
@@ -144,12 +148,14 @@
             </select>
           </div>
         </div>
-          <div class="photo-col">
-            <PhotoManager v-if="editing.id" kind="building" :parent-id="editing.id" />
-            <p v-else class="muted">Save the building first, then add photos.</p>
+          <div v-if="editing.id" class="photo-col">
+            <h3>Building photos</h3>
+            <PhotoManager kind="building" :parent-id="editing.id" />
           </div>
         </div>
         <div class="form-actions">
+          <p v-if="!editing.id" class="save-hint">You can add photos after saving.</p>
+          <button class="secondary" type="button" :disabled="saving" @click="closeForm">Cancel</button>
           <button type="submit" :disabled="saving" data-test="save">{{ saving ? 'Saving...' : 'Save Building' }}</button>
         </div>
       </form>
@@ -436,25 +442,72 @@ onMounted(async () => {
 .icon-btn { width: 30px; height: 30px; padding: 0; }
 .icon-btn.is-hidden { color: #94a3b8; background: #f1f5f9; border-color: #e2e8f0; }
 .icon-btn svg { width: 16px; height: 16px; }
-.building-dialog { width: min(980px, 100%); }
+.dialog.building-dialog { width: min(720px, 100%); padding: 0; border-radius: 18px; max-height: calc(100dvh - 32px); }
+.dialog.building-dialog.with-photos { width: min(1040px, 100%); }
+.building-dialog .dialog-title { padding: 22px 24px 18px; margin: 0; border-bottom: 1px solid #e5ebf3; background: #f8fbff; }
+.building-dialog .dialog-title h2 { font-size: 21px; margin: 5px 0; }
+.form-eyebrow { font-size: 9px; letter-spacing: .12em; font-weight: 750; color: #67809c; }
+.building-dialog .dialog-title .icon-btn { width: 36px; height: 36px; flex: 0 0 36px; }
+.building-dialog .notice { margin: 16px 24px 0; }
 .dialog-title { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 .form-split {
   display: grid;
-  grid-template-columns: minmax(0, 1.35fr) minmax(220px, 0.7fr);
-  gap: 12px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 22px;
   align-items: start;
-  margin-top: 4px;
+  margin: 0; padding: 20px 24px;
 }
+.with-photos .form-split { grid-template-columns: minmax(0, 1.5fr) minmax(250px, 1fr); }
+.building-dialog .form-grid { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 14px 16px; }
+.form-section-title { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; font-size: 12px; color: #21466e; margin: 8px 0 0; padding-top: 14px; border-top: 1px solid #e8edf4; }
+.form-section-title:first-child { padding: 0; margin: 0; border: 0; }
+.form-section-title span { font-weight: 400; font-size: 10px; color: #7b8fa5; }
+.building-dialog :deep(.field label) { font-size: 12px; }
+.building-dialog :deep(.field .hint) { font-size: 10px; line-height: 1.5; }
+.building-dialog input, .building-dialog select { height: 42px; padding: 9px 12px; font-size: 14px; border-radius: 9px; }
+.building-dialog textarea { min-height: 72px; font-size: 14px; border-radius: 9px; }
 .dialog-title { margin-bottom: 6px; }
 .dialog-title p { margin: 0; font-size: 13px; }
 .photo-col {
   border: 1px solid var(--line);
   border-radius: 12px;
-  padding: 8px 10px;
+  padding: 16px;
   background: #f8fafc;
 }
-.form-actions { justify-content: flex-end; margin-top: 8px; }
+.photo-col h3 { font-size: 13px; margin: 0 0 12px; }
+.building-dialog .form-actions { position: sticky; bottom: 0; display: flex; justify-content: flex-end; align-items: center; flex-wrap: wrap; gap: 10px; margin: 0; padding: 16px 24px; border-top: 1px solid #e5ebf3; background: #fff; z-index: 1; }
+.building-dialog .form-actions button { min-height: 44px; font-size: 13px; padding: 10px 18px; }
+.save-hint { margin: 0 auto 0 0; font-size: 11px; color: #70849a; }
+.building-dialog :deep(.field), .photo-col { min-width: 0; }
+.building-dialog input, .building-dialog select, .building-dialog textarea { max-width: 100%; min-width: 0; }
+.building-dialog :deep(.hint), .building-dialog :deep(.field-error) { overflow-wrap: anywhere; }
 @media (max-width: 800px) {
-  .form-split { grid-template-columns: 1fr; }
+  .with-photos .form-split { grid-template-columns: 1fr; }
+}
+@media (max-width: 540px) {
+  .building-overlay { padding: max(8px, env(safe-area-inset-top)) 8px max(8px, env(safe-area-inset-bottom)); }
+  .dialog.building-dialog { max-height: calc(100dvh - max(8px, env(safe-area-inset-top)) - max(8px, env(safe-area-inset-bottom))); overscroll-behavior: contain; scroll-padding-bottom: 105px; }
+  .building-dialog .dialog-title { position: sticky; top: 0; z-index: 2; }
+  .building-dialog .dialog-title .icon-btn { width: 44px; height: 44px; min-height: 44px; flex-basis: 44px; }
+  .building-dialog .dialog-title { padding: 18px 16px; }
+  .building-dialog .dialog-title h2 { font-size: 19px; }
+  .form-split { padding: 16px; }
+  .building-dialog .form-grid { grid-template-columns: minmax(0,1fr); gap: 12px; }
+  .building-dialog input, .building-dialog select, .building-dialog textarea { font-size: 16px; min-height: 44px; scroll-margin-top: 110px; scroll-margin-bottom: 110px; }
+  .building-dialog .form-actions { padding: 12px 16px; }
+  .save-hint { flex: 1 0 100%; }
+  .building-dialog .form-actions button { flex: 1; }
+  .photo-col { padding: 12px; }
+  .photo-col :deep(.upload) { display: flex; flex-direction: column; align-items: stretch; }
+  .photo-col :deep(input[type=file]) { width: 100%; font-size: 12px; }
+}
+@media (max-width: 899px) {
+  .building-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; margin-bottom: 12px; }
+  .building-stats .stat.card { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; min-width: 0; padding: 12px 10px; border-radius: 12px; }
+  .building-stats .stat-icon { width: 28px; height: 28px; border-radius: 8px; flex: 0 0 auto; }
+  .building-stats .stat-icon svg { width: 15px; height: 15px; }
+  .building-stats .stat > div { min-width: 0; }
+  .building-stats strong { display: block; font-size: 22px; line-height: 1.2; }
+  .building-stats .stat > div > span { display: block; margin-top: 4px; font-size: 10px; line-height: 1.4; overflow-wrap: anywhere; }
 }
 </style>

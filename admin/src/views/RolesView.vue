@@ -18,11 +18,11 @@
       </article>
       <article class="stat card tone-amber">
         <span class="stat-icon" style="color:#d97706" aria-hidden="true"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M4 16 6.5 6l3 6 2.5-8 2.5 8 3-6L20 16H4z"/></svg></span>
-        <div><strong>Admin</strong><span>{{ adminCount }} user</span></div>
+        <div><strong>{{ adminCount }}</strong><span>Admins</span></div>
       </article>
       <article class="stat card tone-slate">
         <span class="stat-icon" style="color:#7c3aed" aria-hidden="true"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M3 17.2V21h3.8l11-11-3.8-3.8-11 11zM20.7 7.1a1 1 0 0 0 0-1.4l-2.4-2.4a1 1 0 0 0-1.4 0l-1.8 1.8 3.8 3.8 1.8-1.8z"/></svg></span>
-        <div><strong>Editor</strong><span>{{ editorCount }} user</span></div>
+        <div><strong>{{ editorCount }}</strong><span>Editors</span></div>
       </article>
     </div>
 
@@ -316,5 +316,22 @@ onMounted(load);
 .you-badge { margin-left: 6px; }
 @media (max-width: 800px) {
   .role-grant, .grant-fields { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 640px) {
+  .role-grant { padding: 14px; gap: 14px; border-radius: 12px; }
+  .grant-copy h2 { font-size: 15px; }
+  .grant-copy > p { font-size: 11px; margin: 4px 0; }
+  .steps { gap: 6px; margin-top: 10px; }
+  .steps li { font-size: 11px; line-height: 1.5; gap: 7px; }
+  .steps li::before { width: 18px; height: 18px; font-size: 10px; }
+  .grant-fields { gap: 10px; }
+  .role-grant input, .role-grant select { min-height: 44px; font-size: 16px; min-width: 0; }
+  .role-grant .input-icon { min-width: 0; }
+  .role-table { padding: 14px; border-radius: 12px; }
+  .role-table :deep(td) { white-space: normal; overflow-wrap: anywhere; }
+  .role-table :deep(select) { min-height: 44px; min-width: 0; font-size: 16px; }
+  .role-table .action-row { flex-wrap: wrap; justify-content: flex-end; }
+  .role-stats .stat > div strong { font-size: 20px; }
 }
 </style>

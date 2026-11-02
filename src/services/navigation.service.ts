@@ -10,6 +10,7 @@ import {
 import { normalizeHeading, shortestSignedDelta } from '@/services/orientation.service';
 
 export const CALIBRATION_INSTRUCTION = 'Point your phone toward the path and tap Set Forward.';
+export const PAUSED_INSTRUCTION = 'Guidance paused';
 
 let selectedDestinationId: string | null = null;
 
@@ -52,7 +53,13 @@ function snapshotFrom(destination: Destination): NavigationSnapshot {
     steps: copy.indoorRoute,
     walkedMeters: 0,
     forwardHeading: null,
+    paused: false,
   };
+}
+
+/** Route progress only moves after Set Forward, and never while guidance is paused. */
+function canProgress(state: NavigationSnapshot): boolean {
+  return state.forwardHeading != null && !state.paused;
 }
 
 export function getDestinations(): Destination[] {
@@ -75,6 +82,11 @@ export function selectDestination(id: string): Destination | null {
   return destination ? cloneDestination(destination) : null;
 }
 
+/** Forgets the selected destination, for example when the user chooses another one. */
+export function clearSelectedDestination() {
+  selectedDestinationId = null;
+}
+
 export function getSelectedDestination(): Destination | null {
   if (selectedDestinationId == null) return null;
   const destination = findDestination(selectedDestinationId);
@@ -95,6 +107,7 @@ export function createTestNavigation(): NavigationSnapshot {
 
 /** Save the direction the phone is facing as the path's forward direction. */
 export function setForwardHeading(state: NavigationSnapshot, heading: number): NavigationSnapshot {
+  if (state.paused) return state;
   return { ...state, forwardHeading: normalizeHeading(heading) };
 }
 
@@ -221,7 +234,7 @@ export function isApproachingTurn(state: NavigationSnapshot): boolean {
 
 /** Arrows for the current stretch only. A turn ahead is included once that turn is the next step. */
 export function guideArrows(state: NavigationSnapshot): GuideArrow[] {
-  if (hasArrived(state) || state.steps.length === 0) return [];
+  if (state.paused || hasArrived(state) || state.steps.length === 0) return [];
   const segment = currentSegment(state);
   if (!segment) return [];
   const arrows: GuideArrow[] = [];
@@ -262,6 +275,7 @@ function progressLimit(state: NavigationSnapshot): number {
 
 /** Finish the turn the phone is facing and continue on the new heading. */
 export function completeCurrentTurn(state: NavigationSnapshot): NavigationSnapshot {
+  if (!canProgress(state)) return state;
   const segment = currentSegment(state);
   if (!segment || segment.direction === 'straight' || hasArrived(state)) return state;
   const alignedHeading = requiredHeading(state);
@@ -274,6 +288,7 @@ export function completeCurrentTurn(state: NavigationSnapshot): NavigationSnapsh
 
 export function navigationInstruction(state: NavigationSnapshot, phoneHeading: number | null = null): string {
   if (hasArrived(state)) return `You have reached ${state.destinationName}.`;
+  if (state.paused) return PAUSED_INSTRUCTION;
   if (state.forwardHeading == null) return CALIBRATION_INSTRUCTION;
 
   const required = requiredHeading(state);
@@ -297,6 +312,7 @@ function routeInstruction(state: NavigationSnapshot): string {
 }
 
 export function updateRouteProgress(state: NavigationSnapshot, meters = 1): NavigationSnapshot {
+  if (!canProgress(state)) return state;
   const walkedMeters = Math.min(progressLimit(state), state.walkedMeters + meters);
   return { ...state, walkedMeters };
 }
@@ -307,7 +323,7 @@ export function moveForward(state: NavigationSnapshot, meters = 1): NavigationSn
 
 /** Skip to the start of the next route step. */
 export function advanceInstruction(state: NavigationSnapshot): NavigationSnapshot {
-  if (hasArrived(state)) return state;
+  if (!canProgress(state) || hasArrived(state)) return state;
   const segment = currentSegment(state);
   if (segment && segment.direction !== 'straight') return state;
   const index = currentStepIndex(state);
@@ -318,8 +334,12 @@ export function advanceInstruction(state: NavigationSnapshot): NavigationSnapsho
   return { ...state, walkedMeters: Math.min(progressLimit(state), boundary) };
 }
 
-/** Jump to the current or next right-turn step so that part of the overlay can be checked quickly. */
+/**
+ * Debug shortcut: jump to the current or next right-turn step so that part of the overlay can be
+ * checked quickly. Works before Set Forward so the turn arrows can be inspected, but not while paused.
+ */
 export function jumpToRightTurn(state: NavigationSnapshot): NavigationSnapshot {
+  if (state.paused) return state;
   let boundary = 0;
   for (const step of state.steps) {
     if (step.direction === 'right' && state.walkedMeters < boundary + step.distance) {
@@ -330,8 +350,31 @@ export function jumpToRightTurn(state: NavigationSnapshot): NavigationSnapshot {
   return state;
 }
 
-/** Restart the same destination. Clears distance and the saved forward heading. */
+/** Restart the same destination. Clears distance, the saved forward heading, and any pause. */
 export function resetNavigation(state: NavigationSnapshot): NavigationSnapshot {
   const destination = findDestination(state.destinationId);
-  return destination ? snapshotFrom(destination) : state;
+  return destination
+    ? snapshotFrom(destination)
+    : { ...state, steps: state.steps.map((step) => ({ ...step })), walkedMeters: 0, forwardHeading: null, paused: false };
+}
+
+/** "I lost my way": freezes route progress. It does not move or guess the user's position. */
+export function pauseNavigation(state: NavigationSnapshot): NavigationSnapshot {
+  if (state.paused || hasArrived(state)) return state;
+  return { ...state, paused: true };
+}
+
+/** Continues from the same route position and calibration. Only for a user still at that spot. */
+export function resumeNavigation(state: NavigationSnapshot): NavigationSnapshot {
+  if (!state.paused) return state;
+  return { ...state, paused: false };
+}
+
+/**
+ * Starts the fixed route over. Requires the user to confirm they are standing at the
+ * designated entrance; afterwards Set Forward is needed again.
+ */
+export function restartFromEntrance(state: NavigationSnapshot, confirmedAtEntrance: boolean): NavigationSnapshot {
+  if (!confirmedAtEntrance) return state;
+  return resetNavigation(state);
 }

@@ -470,4 +470,20 @@ onMounted(load);
   .destination-table tbody tr:not(.expanded) > td:not([data-label="Destination"]) { display: none; }
   .destination-table tbody tr:not(.expanded) > td[data-label="Destination"] { border-bottom: 0; }
 }
+
+@media (max-width: 640px) {
+  .dest-summary { grid-template-columns: 105px minmax(0,1fr); align-items: stretch; gap: 8px; margin-bottom: 12px; }
+  .dest-summary .dest-count.card { min-width: 0; width: 100%; padding: 10px; flex-direction: column; align-items: flex-start; gap: 6px; border-radius: 12px; }
+  .dest-count .stat-icon { width: 26px; height: 26px; border-radius: 8px; }
+  .dest-count .stat-icon svg { width: 15px; height: 15px; }
+  .dest-count strong { font-size: 22px; }
+  .dest-count > div > span { font-size: 10px; line-height: 1.4; }
+  .dest-summary .dest-hidden { width: auto; min-width: 0; padding: 10px; font-size: 10px; line-height: 1.6; border-radius: 12px; }
+  .create-bar { margin: 10px 0 14px; gap: 6px; }
+  .create-bar > p { font-size: 10px; line-height: 1.5; }
+  .create-bar > button { font-size: 12px; padding: 8px 12px; }
+  .destination-table td[data-label="Destination"] { padding: 12px; }
+  .destination-table .sub { font-size: 10px; margin-top: 0; }
+  .destination-table .destination-toggle { font-size: 14px; }
+}
 </style>

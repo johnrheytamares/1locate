@@ -509,4 +509,23 @@ onMounted(load);
   .activity li { grid-template-columns: 12px 1fr; }
   .activity time { grid-column: 2; }
 }
+
+@media (max-width: 640px) {
+  .stat-grid { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; margin-bottom: 12px; }
+  .stat-card { padding: 12px; gap: 10px; border-radius: 12px; min-width: 0; }
+  .stat-card > div { min-width: 0; }
+  .stat-card strong { font-size: 22px; }
+  .stat-card > div span { font-size: 11px; overflow-wrap: anywhere; }
+  .stat-card small { display: none; }
+  .stat-card .stat-icon { width: 28px; height: 28px; border-radius: 8px; }
+  .stat-card .stat-icon svg { width: 15px; height: 15px; }
+  .hello { margin-bottom: 14px; }
+  .hello h1 { font-size: 20px; }
+  .hello p, .hello-side { font-size: 11px; line-height: 1.5; }
+  .dash-grid { gap: 12px; }
+  .panel { padding: 14px; border-radius: 12px; }
+  .overview { flex-direction: row; flex-wrap: wrap; justify-content: center; gap: 14px; }
+  .donut { width: 130px; height: 130px; flex-shrink: 0; }
+  .legend { flex: 1 1 130px; min-width: 0; }
+}
 </style>

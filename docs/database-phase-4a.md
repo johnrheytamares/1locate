@@ -1,8 +1,23 @@
 # 1Locate Phase 4A: Campus Database and Confirm Destination
 
 Phase 4A prepares the Supabase database for the future Admin Module and adds a Confirm Destination
-screen to the mobile app. There is no Admin UI in this phase. The Admin Module will be a separate
-web app that uses the same Supabase project.
+screen to the mobile app. The Admin Module is now implemented in `admin/` as a separate
+web app within the same repository, using the same Supabase project.
+
+## Project status update (2026-11-02)
+
+- Latest inspected commit: `e011337` (`ui improved`), following `52cdf0a` (`Add 1Locate admin web app`).
+- The mobile destination picker, confirmation screen, and camera navigation screen have updated interfaces.
+- The admin app includes buildings, floors, rooms, photos, destination links, and role management,
+  with updated dashboard, navigation, and management interfaces. See `../admin/README.md`.
+- Destination management now creates inactive destinations, edits fixed routes, records estimated
+  routes on supported phones, links rooms, and toggles visibility after a verification prompt.
+  The Android admin project is in `admin/android`; see `../admin/README.md` for setup and limitations.
+- Adding a room does not automatically create a navigable destination. A separate destination
+  record with a valid indoor route is required by the current mobile catalog.
+- The migration statuses below are historical implementation notes, not a current live database
+  audit. Verify the deployed schema and access rules before relying on them.
+- This update is based on source inspection; tests and live Supabase access were not rerun.
 
 Nothing here invents campus data. Coordinates, room details, photos, and floor maps stay empty
 (NULL) until an Admin or Editor enters verified information.
@@ -52,7 +67,10 @@ the fixed indoor route in the existing JSON format. A destination can point at o
 | `src/composables/useDestinationCatalog.ts` | Shared catalog state and source label |
 | `src/views/ConfirmDestinationPage.vue` | Confirm Destination screen (`/destinations/:id`) |
 
-## Migration order
+## Migration order (historical status)
+
+The statuses in this table were recorded when Phase 4A was written. They do not establish the
+current deployment state.
 
 | Order | File | Status |
 | --- | --- | --- |
@@ -193,10 +211,11 @@ the `room_images` / `building_images` / `floor_maps` row with that `storage_path
 
 ## Limitations
 
-- The SQL was verified in a local Postgres emulation with stand-in `auth` and `storage` schemas.
-  It has not been run against the live Supabase project.
+- The original Phase 4A SQL verification used a local Postgres emulation with stand-in `auth`
+  and `storage` schemas. Current live deployment and role permissions need separate verification.
 - Bucket size and type limits are enforced by the Storage API, which the local emulation does not
   include. Test them with a real upload after applying the migrations.
-- There is no Admin UI yet, so campus content can only be entered through the Dashboard or SQL.
-- Entrance coordinates, room details, photos, and floor maps are still empty until surveyed and
-  entered.
+- The Admin UI supports campus content, destination creation, and fixed-route editing. Recording
+  accuracy, Android runtime behavior, and live role permissions require device/live verification.
+- Real entrance coordinates and route distances must be surveyed and entered. Source inspection
+  does not establish which campus records or photos are currently populated in the live database.

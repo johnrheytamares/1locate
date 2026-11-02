@@ -7,9 +7,7 @@
         </ion-buttons>
         <div class="brand-lockup">
           <div class="brand-title">
-            <span class="pin" aria-hidden="true">
-              <ion-icon :icon="location" />
-            </span>
+            <img class="header-logo" src="/images/1locate-logo.png" alt="" />
             <strong>1Locate</strong>
           </div>
           <span class="brand-sub">Choose a Destination</span>
@@ -21,15 +19,30 @@
         </div>
       </ion-toolbar>
       <ion-toolbar class="search-toolbar">
-        <ion-searchbar
-          v-model="query"
-          placeholder="Search destinations..."
-          :debounce="150"
-        />
+        <div class="search-row">
+          <ion-searchbar
+            v-model="query"
+            placeholder="Search destinations..."
+            :debounce="150"
+            @ion-input="clearVoiceMatches"
+          />
+          <ion-button
+            class="mic"
+            :class="{ listening }"
+            :disabled="listening"
+            :aria-label="listening ? 'Listening' : 'Search by voice'"
+            data-test="voice-search"
+            @click="onVoiceSearch"
+          >
+            <ion-icon slot="icon-only" :icon="listening ? micOutline : mic" aria-hidden="true" />
+          </ion-button>
+        </div>
       </ion-toolbar>
     </ion-header>
 
     <ion-content class="picker-content">
+      <p v-if="voiceMessage" class="voice-status" role="status" data-test="voice-status">{{ voiceMessage }}</p>
+      <ion-button class="map-routes" fill="outline" router-link="/indoor-map">Explore floor-map routes</ion-button>
       <div class="source-banner" :class="{ live: isLive }">
         <ion-icon :icon="isLive ? wifi : cloudOfflineOutline" aria-hidden="true" />
         <p class="source" data-test="source">{{ sourceLabel }}</p>
@@ -99,6 +112,7 @@ import {
   IonSearchbar,
   IonToolbar,
   onIonViewWillEnter,
+  onIonViewWillLeave,
   useIonRouter,
 } from '@ionic/vue';
 import {
@@ -108,8 +122,9 @@ import {
   chevronForward,
   cloudOfflineOutline,
   flaskOutline,
-  location,
   locationOutline,
+  mic,
+  micOutline,
   paperPlaneOutline,
   peopleOutline,
   schoolOutline,
@@ -117,19 +132,85 @@ import {
   wifi,
 } from 'ionicons/icons';
 import { useDestinationCatalog } from '@/composables/useDestinationCatalog';
+import { useVoice } from '@/composables/useVoice';
 import type { Destination } from '@/models/navigation';
 import { destinationTypeLabel } from '@/services/destination-details.service';
 import { indoorRouteMeters } from '@/services/navigation.service';
+import { listenForDestination, stopListening } from '@/services/speech-input.service';
+import { resolveVoiceSearch } from '@/services/voice-query.service';
 
 const ionRouter = useIonRouter();
 const query = ref('');
 const { destinations, failed, loading, isLive, sourceLabel, load } = useDestinationCatalog();
+const voice = useVoice();
+const listening = ref(false);
+const voiceMessage = ref('');
+/** Set when a spoken request matched several destinations; the list then shows only those. */
+const voiceMatchIds = ref<string[] | null>(null);
+let pageActive = false;
 
 onIonViewWillEnter(() => {
+  pageActive = true;
   void load();
 });
 
+onIonViewWillLeave(() => {
+  pageActive = false;
+  voiceMessage.value = '';
+  voiceMatchIds.value = null;
+  if (listening.value) void stopListening();
+});
+
+function clearVoiceMatches() {
+  voiceMatchIds.value = null;
+}
+
+function joinNames(names: string[]): string {
+  if (names.length <= 1) return names.join('');
+  return `${names.slice(0, -1).join(', ')} or ${names[names.length - 1]}`;
+}
+
+async function onVoiceSearch() {
+  if (listening.value) return;
+  voice.reset();
+  voiceMatchIds.value = null;
+  voiceMessage.value = 'Listening... say where you want to go.';
+  listening.value = true;
+  const heard = await listenForDestination();
+  listening.value = false;
+  if (!pageActive) return;
+
+  if (!heard.ok) {
+    voiceMessage.value = heard.message;
+    voice.announce(heard.message);
+    return;
+  }
+
+  const result = resolveVoiceSearch(heard.transcripts, destinations.value);
+  query.value = '';
+  if (result.kind === 'single') {
+    voiceMessage.value = `Found ${result.destination.name}.`;
+    voice.announce(`${result.destination.name}. Tap Start Navigation when you are ready.`);
+    onSelect(result.destination.id);
+    return;
+  }
+  if (result.kind === 'multiple') {
+    voiceMatchIds.value = result.destinations.map((item) => item.id);
+    const names = joinNames(result.destinations.map((item) => item.name));
+    voiceMessage.value = `I found ${result.destinations.length} places for "${result.query}". Pick one below.`;
+    voice.announce(`I found ${names}. Pick one from the list.`);
+    return;
+  }
+  const said = heard.transcripts[0];
+  voiceMessage.value = `No destination matches "${said}". Try again or type the name.`;
+  voice.announce('I could not find that destination. Try again or type the name.');
+}
+
 const filtered = computed(() => {
+  if (voiceMatchIds.value) {
+    const ids = voiceMatchIds.value;
+    return destinations.value.filter((destination) => ids.includes(destination.id));
+  }
   const needle = query.value.trim().toLowerCase();
   if (!needle) return destinations.value;
   return destinations.value.filter((destination) => (
@@ -411,4 +492,37 @@ function onSelect(id: string) {
   text-transform: none;
   height: 44px;
 }
+.picker-toolbar { --min-height: 50px; }
+.search-toolbar { --min-height: 54px; padding-bottom: 4px; }
+.brand-lockup strong { font-size: 18px; }
+.brand-sub { font-size: 11px; }
+.search-toolbar ion-searchbar { --border-radius: 11px; padding-inline: 8px; font-size: 14px; }
+.source-banner { margin: 10px 12px 4px; padding: 8px 10px; border-radius: 10px; gap: 8px; }
+.source { font-size: 11px; line-height: 1.5; }
+.source-banner > ion-icon { font-size: 17px; }
+.source-banner ion-button { --color: #1d4ed8; font-size: 11px; min-height: 40px; height: 40px; }
+.card { margin: 9px 12px; padding: 12px; border-radius: 14px; box-shadow: 0 3px 12px #153d7308; }
+.card-top { gap: 10px; }
+.dest-icon { width: 36px; height: 36px; border-radius: 11px; font-size: 19px; }
+.card h2 { font-size: 16px; line-height: 1.3; font-weight: 750; }
+.building { font-size: 11px; line-height: 1.5; }
+.building ion-icon { flex-shrink: 0; }
+.meta { font-size: 11px; line-height: 1.4; margin-top: 3px; }
+.stats { font-size: 11px; gap: 10px; margin-top: 6px; }
+.stats ion-icon { font-size: 13px; }
+.select { --color: #fff; --border-radius: 10px; margin: 10px 0 0; height: 44px; min-height: 44px; font-size: 13px; letter-spacing: 0; }
+.picker-content::part(scroll) { padding-bottom: env(safe-area-inset-bottom, 0px); }
+@media (min-width: 600px) {
+  .card, .source-banner, .empty { max-width: 520px; margin-left: auto; margin-right: auto; }
+}
+.search-row { display: flex; align-items: center; gap: 6px; padding-right: 8px; }
+.search-row ion-searchbar { flex: 1; }
+.mic { --background: #1d4ed8; --border-radius: 11px; --box-shadow: none; margin: 0 0 4px; width: 44px; height: 44px; min-height: 44px; }
+.mic.listening { --background: #dc2626; opacity: 1; }
+.voice-status { margin: 10px 12px 0; padding: 8px 10px; border-radius: 10px; background: #fff7e6; color: #7a4b00; font-size: 12px; font-weight: 600; line-height: 1.4; }
+@media (min-width: 600px) {
+  .voice-status { max-width: 520px; margin-left: auto; margin-right: auto; }
+}
+.header-logo { width: 30px; height: 34px; object-fit: contain; flex-shrink: 0; }
+.map-routes { display: block; margin: 10px 12px; --color: #1d4ed8; --border-color: #c4d7ef; --border-radius: 10px; font-size: 12px; text-transform: none; min-height: 44px; }
 </style>

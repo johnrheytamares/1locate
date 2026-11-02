@@ -6,8 +6,8 @@
     aria-hidden="true"
   >
     <template v-if="direction === 'up'">
-      <path class="body" d="M40 6 L68 40 H54 V90 H26 V40 H12 Z" />
-      <path class="shine" d="M40 18 L54 36 H46 V78 H34 V36 H26 Z" />
+      <path class="body" d="M5 54 L40 12 L75 54 V82 L40 45 L5 82 Z" />
+      <path class="shine" d="M9 55 L40 19 L71 55 V61 L40 30 L9 61 Z" />
     </template>
     <template v-else>
       <path class="body" d="M22 78 V46 H58 V28 L90 52 L58 76 V58 H38 V78 Z" />
@@ -32,8 +32,8 @@ defineProps<{
 }
 
 .arrow.up {
-  width: 54px;
-  height: 64px;
+  width: 106px;
+  height: 82px;
 }
 
 .arrow.right,
@@ -47,7 +47,7 @@ defineProps<{
 }
 
 .body {
-  fill: rgba(58, 196, 255, 0.9);
+  fill: rgba(0, 185, 255, 0.9);
   stroke: rgba(236, 251, 255, 0.95);
   stroke-width: 3;
   stroke-linejoin: round;
@@ -58,7 +58,7 @@ defineProps<{
 }
 
 .arrow.active .body {
-  fill: rgba(214, 248, 255, 0.96);
+  fill: rgba(76, 225, 255, 0.98);
 }
 
 .arrow.active {
@@ -85,4 +85,5 @@ defineProps<{
     filter: drop-shadow(0 0 16px rgba(210, 248, 255, 1));
   }
 }
+@media (prefers-reduced-motion: reduce) { .arrow.active { animation: none; } }
 </style>

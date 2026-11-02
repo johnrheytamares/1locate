@@ -31,6 +31,7 @@ const routes: RouteRecordRaw[] = [
       { path: '', name: 'dashboard', component: () => import('@/views/DashboardView.vue'), meta: { requires: 'content' } },
       { path: 'buildings', name: 'buildings', component: () => import('@/views/BuildingsView.vue'), meta: { requires: 'content' } },
       { path: 'floors', name: 'floors', component: () => import('@/views/FloorsView.vue'), meta: { requires: 'content' } },
+      { path: 'indoor-maps', name: 'indoor-maps', component: () => import('@/views/IndoorMapsView.vue'), meta: { requires: 'content' } },
       { path: 'rooms', name: 'rooms', component: () => import('@/views/RoomsView.vue'), meta: { requires: 'content' } },
       { path: 'destinations', name: 'destinations', component: () => import('@/views/DestinationsView.vue'), meta: { requires: 'content' } },
       { path: 'roles', name: 'roles', component: () => import('@/views/RolesView.vue'), meta: { requires: 'admin' } },

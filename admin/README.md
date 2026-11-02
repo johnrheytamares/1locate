@@ -209,5 +209,11 @@ named `ZZTEST ...` and the output says which table they are in. Only error codes
 
 ## Out of scope (later phases)
 
-Map editor and floor-map upload (Phase 4C), satellite map, path graph and A* routing, voice guidance,
-and AR changes.
+Satellite map, voice guidance, and sensor-driven AR routing changes.
+
+## Indoor floor maps and routing
+
+**Indoor Maps & Routes** now provides floor-plan upload, calibration, node/edge editing, stairs/elevator
+connections, graph publication and standard/step-free route previews. Mobile uses a separate map-guidance
+screen with explicit checkpoint and floor confirmation. Apply the new Phase 4C migration before use.
+See [setup, deployment and limitations](../docs/indoor-maps-phase-4c.md).

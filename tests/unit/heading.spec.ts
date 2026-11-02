@@ -34,6 +34,7 @@ function turnRoute(): NavigationSnapshot {
     ],
     walkedMeters: 0,
     forwardHeading: null,
+    paused: false,
   };
 }
 
@@ -131,11 +132,11 @@ describe('campus destinations', () => {
   });
 
   test('shows only the current straight stretch until the turn is next', () => {
-    const start = turnRoute();
+    const start = setForwardHeading(turnRoute(), 20);
     expect(guideArrows(start).map((arrow) => arrow.direction)).toEqual(['straight', 'straight']);
     const approaching = updateRouteProgress(start, 4);
     expect(guideArrows(approaching).map((arrow) => arrow.direction)).toEqual(['straight', 'right']);
-    expect(navigationInstruction(setForwardHeading(approaching, 20), 20)).toBe('Turn right ahead');
+    expect(navigationInstruction(approaching, 20)).toBe('Turn right ahead');
   });
 
   test('holds the route on a turn until that turn is completed by heading', () => {

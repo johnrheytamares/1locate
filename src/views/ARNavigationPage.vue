@@ -7,11 +7,22 @@
         </ion-buttons>
         <div class="brand-lockup">
           <div class="brand-title">
-            <span class="pin" aria-hidden="true"><ion-icon :icon="location" /></span>
+            <img class="header-logo" src="/images/1locate-logo.png" alt="" />
             <strong>1Locate</strong>
           </div>
           <span class="brand-sub">Camera Navigation</span>
         </div>
+        <ion-buttons slot="end">
+          <ion-button
+            color="light"
+            :aria-label="voiceMuted ? 'Turn voice guidance on' : 'Mute voice guidance'"
+            :aria-pressed="voiceMuted"
+            data-test="voice-toggle"
+            @click="toggleVoice"
+          >
+            <ion-icon slot="icon-only" :icon="voiceMuted ? volumeMuteOutline : volumeHighOutline" />
+          </ion-button>
+        </ion-buttons>
       </ion-toolbar>
     </ion-header>
 
@@ -31,6 +42,12 @@
           <span v-if="gpsSource === 'real' && gpsStatus === 'tracking' && !gpsPrecise" class="chip pill">
             Precise location is off
           </span>
+        </div>
+        <div v-if="entranceUnmapped" class="prompt-actions">
+          <ion-button expand="block" data-test="at-entrance" @click="onAtEntrance">I'm at the entrance</ion-button>
+          <ion-button expand="block" fill="outline" class="back" @click="backToDestinations">
+            Back to destinations
+          </ion-button>
         </div>
         <div v-if="locationPrompt && (locationPrompt.action || locationPrompt.back)" class="prompt-actions">
           <p v-if="locationPrompt.hint" class="hint">{{ locationPrompt.hint }}</p>
@@ -68,7 +85,11 @@
         </div>
       </template>
 
-      <div class="sheet">
+      <div class="sheet" :class="{ 'guidance-sheet': !showMapWait }">
+        <div v-if="!showMapWait" class="journey-card">
+          <div class="journey-identity"><span class="journey-pin"><ion-icon :icon="location" aria-hidden="true" /></span><div><span class="dest-kicker">{{ isOutdoor ? 'Building entrance' : 'Destination' }}</span><h2>{{ markerName }}</h2><p data-test="journey-distance">Distance: <strong>{{ distanceLabel }}</strong></p></div></div>
+          <div class="journey-instruction"><ion-icon :icon="paperPlaneOutline" aria-hidden="true" /><strong>{{ instruction }}</strong></div>
+        </div>
         <div v-if="cameraMessage" class="camera-banner">
           <ion-icon :icon="cameraOutline" aria-hidden="true" />
           <p class="camera-message">{{ cameraMessage }}</p>
@@ -93,11 +114,75 @@
           <span><ion-icon :icon="locationOutline" aria-hidden="true" /> Distance</span>
           <strong>{{ distanceLabel }}</strong>
         </div>
-        <p v-if="!showMapWait" class="live-note">{{ destinationName }} · {{ distanceLabel }}</p>
+
+        <section v-if="showIndoorHelp" class="indoor-help">
+          <template v-if="!navigation.paused">
+            <div class="indoor-controls">
+              <ion-button
+                expand="block"
+                :fill="navigation.forwardHeading == null ? 'solid' : 'outline'"
+                :disabled="heading == null"
+                data-test="set-forward"
+                @click="onSetForward"
+              >
+                Set Forward
+              </ion-button>
+              <ion-button
+                expand="block"
+                :disabled="navigation.forwardHeading == null"
+                data-test="move-forward"
+                @click="onMoveForward"
+              >
+                Move Forward
+              </ion-button>
+            </div>
+            <p class="option-hint">
+              {{ navigation.forwardHeading == null
+                ? 'Stand at the entrance, point your phone along the path, then tap Set Forward.'
+                : 'Tap Move Forward each time you walk about 1 meter along the path.' }}
+            </p>
+            <p class="scope-note" data-test="indoor-scope">
+              Fixed route from {{ entranceName }}. 1Locate cannot see where you are inside the building,
+              so it will not notice if you leave the route.
+            </p>
+            <ion-button expand="block" fill="outline" class="lost" data-test="lost-way" @click="onLostWay">
+              <ion-icon slot="start" :icon="helpCircleOutline" aria-hidden="true" />
+              I lost my way
+            </ion-button>
+          </template>
+          <div v-else-if="!confirmingRestart" class="recovery" role="region" aria-label="Guidance paused" data-test="recovery">
+            <h2>Guidance paused</h2>
+            <p>
+              1Locate cannot tell where you are inside the building. It only follows the fixed route from
+              {{ entranceName }}, so it cannot find you or give directions from here.
+            </p>
+            <ion-button expand="block" data-test="resume" @click="onResume">Resume guidance</ion-button>
+            <p class="option-hint">Only if you are still standing where you paused.</p>
+            <ion-button expand="block" fill="outline" data-test="restart" @click="confirmingRestart = true">
+              Restart from entrance
+            </ion-button>
+            <ion-button expand="block" fill="clear" data-test="choose-another" @click="chooseAnotherDestination">
+              Choose another destination
+            </ion-button>
+          </div>
+          <div v-else class="recovery" role="region" aria-label="Restart from entrance" data-test="restart-confirm">
+            <h2>Go back to {{ entranceName }}</h2>
+            <p>
+              Restart only when you are standing at the entrance. Route progress and Set Forward will be
+              cleared, and you will need to tap Set Forward again.
+            </p>
+            <ion-button expand="block" data-test="confirm-entrance" @click="onRestartConfirmed">
+              I'm at the entrance
+            </ion-button>
+            <ion-button expand="block" fill="outline" data-test="cancel-restart" @click="confirmingRestart = false">
+              Not yet
+            </ion-button>
+          </div>
+        </section>
         <p v-if="isOutdoor && outdoor.raw" class="path-note">GPS Accuracy ±{{ Math.round(outdoor.raw.accuracy) }} m</p>
         <p v-if="showPathNote" class="path-note">Follow the blue path</p>
 
-        <div class="debug">
+        <div v-if="devTools" class="debug" data-test="debug">
           <details>
             <summary>Debug</summary>
           <ul v-if="isOutdoor" class="debug-readout">
@@ -132,6 +217,7 @@
             <li>Phone Heading: {{ phoneHeadingLabel }}</li>
             <li>Forward Heading: {{ forwardHeadingLabel }}</li>
             <li>Remaining Distance: {{ distanceLabel }}</li>
+            <li>Guidance: {{ navigation.paused ? 'paused' : 'active' }}</li>
           </ul>
           </details>
           <div v-if="isOutdoor" class="debug-actions">
@@ -160,8 +246,6 @@
             </ion-button>
           </div>
           <div v-else class="debug-actions">
-            <ion-button :disabled="heading == null" @click="onSetForward">Set Forward</ion-button>
-            <ion-button @click="onMoveForward">Move Forward</ion-button>
             <ion-button @click="onNext">Next Step</ion-button>
             <ion-button @click="onTurnRight">Turn Right</ion-button>
             <ion-button class="reset" @click="onReset">
@@ -175,10 +259,13 @@
 
     <ion-alert
       :is-open="showEntrance"
-      :header="`You have reached ${buildingName}.`"
-      :message="`Continue to ${destinationName}.`"
+      :header="`Are you at ${entranceName}?`"
+      :message="entranceMessage"
       :backdrop-dismiss="false"
-      :buttons="[{ text: 'Continue', role: 'confirm' }]"
+      :buttons="[
+        { text: 'Choose another destination', role: 'cancel' },
+        { text: 'Start indoor route', role: 'confirm' },
+      ]"
       @didDismiss="onEntranceDismiss"
     />
 
@@ -193,7 +280,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onUnmounted, ref, watch } from 'vue';
+import { computed, nextTick, onUnmounted, ref, watch } from 'vue';
 import {
   IonAlert,
   IonBackButton,
@@ -217,6 +304,7 @@ import {
   cameraOutline,
   cashOutline,
   flaskOutline,
+  helpCircleOutline,
   locateOutline,
   location,
   locationOutline,
@@ -225,15 +313,20 @@ import {
   peopleOutline,
   refreshOutline,
   schoolOutline,
+  volumeHighOutline,
+  volumeMuteOutline,
   walkOutline,
 } from 'ionicons/icons';
 import NavigationOverlay from '@/components/navigation/NavigationOverlay.vue';
 import { LOCATION_RATIONALE, useOutdoorGps } from '@/composables/useOutdoorGps';
+import { useVoice } from '@/composables/useVoice';
+import { SHOW_DEV_TOOLS } from '@/config/dev-tools';
 import { FACING_TOLERANCE_DEGREES, TURN_ALIGNMENT_HOLD_MS, type Destination } from '@/models/navigation';
 import { startRearPreview, stopRearPreview } from '@/services/camera.service';
 import { LOCATION_MESSAGES } from '@/services/location.service';
 import {
   advanceInstruction,
+  clearSelectedDestination,
   completeCurrentTurn,
   createTestNavigation,
   currentSegment,
@@ -248,9 +341,12 @@ import {
   moveForward,
   navigationInstruction,
   nextRouteStep,
+  pauseNavigation,
   remainingMeters,
   requiredHeading,
   resetNavigation,
+  restartFromEntrance,
+  resumeNavigation,
   setForwardHeading,
   type GuideArrow,
 } from '@/services/navigation.service';
@@ -280,6 +376,12 @@ const showArrival = ref(false);
 const showEntrance = ref(false);
 const pageOpen = ref(false);
 const turnAlignment = ref('not a turn');
+const confirmingRestart = ref(false);
+const voiceSession = ref(0);
+const devTools = SHOW_DEV_TOOLS;
+/** False when the user said they reached the entrance because it has no surveyed GPS location. */
+const entranceByGps = ref(true);
+const { muted: voiceMuted, guide: speakGuidance, announce, reset: resetVoice, toggleMuted: toggleVoice } = useVoice();
 
 const gps = useOutdoorGps(heading);
 const {
@@ -299,9 +401,14 @@ let wentBackground = false;
 
 const isOutdoor = computed(() => stage.value !== 'indoor');
 const showMapWait = computed(() => isOutdoor.value && !outdoorGuiding.value);
-const waitTitle = computed(() => (locationPrompt.value ? 'Location needed' : 'Getting your location...'));
+const waitTitle = computed(() => {
+  if (locationPrompt.value) return 'Location needed';
+  if (entranceUnmapped.value) return 'Entrance location not set';
+  return 'Getting your location...';
+});
 const waitSubtitle = computed(() => {
   if (locationPrompt.value) return locationPrompt.value.text;
+  if (entranceUnmapped.value) return instruction.value;
   if (!outdoor.value.location) return 'Please wait while we find your current position.';
   return instruction.value;
 });
@@ -321,13 +428,29 @@ const outdoorTargetName = computed(() => (
   outdoor.value.target?.name ?? destination.value?.outdoorTarget.name ?? buildingName.value
 ));
 const markerName = computed(() => (isOutdoor.value ? outdoorTargetName.value : destinationName.value));
+/** The designated entrance every fixed indoor route starts from. */
+const entranceName = computed(() => destination.value?.outdoorTarget.name ?? buildingName.value);
 const hasSurveyedTarget = computed(() => destination.value != null && gps.hasSurveyedTarget());
+/** REAL GPS cannot guide to an entrance without surveyed coordinates, so the user says when they are there. */
+const entranceUnmapped = computed(() => (
+  stage.value === 'outdoor'
+  && gpsSource.value === 'real'
+  && !hasSurveyedTarget.value
+  && outdoor.value.target == null
+  && locationPrompt.value == null
+));
+const entranceMessage = computed(() => (
+  entranceByGps.value
+    ? `GPS shows you near the entrance, but it cannot tell where you are inside. Start the route to ${destinationName.value} only when you are standing at ${entranceName.value}.`
+    : `1Locate cannot check this with GPS. Start the route to ${destinationName.value} only when you are standing at ${entranceName.value}.`
+));
 
 const arrived = computed(() => hasArrived(navigation.value));
 const stepIndex = computed(() => currentStepIndex(navigation.value));
 const currentDirection = computed(() => currentStep(navigation.value)?.direction ?? 'straight');
 const modeLabel = computed(() => (isOutdoor.value ? 'OUTDOOR (GPS)' : 'INDOOR (fixed route)'));
 const arrivalMessage = computed(() => `You have reached ${navigation.value.destinationName}.`);
+const showIndoorHelp = computed(() => stage.value === 'indoor' && !arrived.value);
 
 const locationPrompt = computed(() => {
   if (!isOutdoor.value || gpsSource.value !== 'real') return null;
@@ -370,6 +493,9 @@ const instruction = computed(() => {
   if (!isOutdoor.value) return navigationInstruction(navigation.value, heading.value);
   if (locationPrompt.value) return locationPrompt.value.text;
   if (gpsSource.value === 'real' && !outdoor.value.location && gpsMessage.value) return gpsMessage.value;
+  if (entranceUnmapped.value) {
+    return `The GPS location of ${entranceName.value} is not set yet. Walk to ${entranceName.value}, then tap I'm at the entrance.`;
+  }
   return outdoorInstruction(outdoor.value, heading.value, buildingName.value);
 });
 
@@ -380,11 +506,13 @@ const arrows = computed(() => {
 
 const pathOffset = computed(() => {
   if (isOutdoor.value) return outdoorGuiding.value ? offset.value : null;
-  return navigation.value.forwardHeading == null ? null : offset.value;
+  return navigation.value.forwardHeading == null || navigation.value.paused ? null : offset.value;
 });
 
 const showPathNote = computed(() => (
-  isOutdoor.value ? outdoorGuiding.value && !locationPrompt.value : navigation.value.forwardHeading != null
+  isOutdoor.value
+    ? outdoorGuiding.value && !locationPrompt.value
+    : navigation.value.forwardHeading != null && !navigation.value.paused
 ));
 
 const accuracyLabel = computed(() => {
@@ -428,9 +556,22 @@ const offsetLabel = computed(() => (
 
 watch(() => outdoor.value.arrived, (isArrived) => {
   if (!isArrived || stage.value !== 'outdoor') return;
+  entranceByGps.value = true;
   stage.value = 'entrance';
   gps.stop();
   showEntrance.value = true;
+  announce(`You are near ${entranceName.value}. Start the indoor route only when you are standing at the entrance.`);
+});
+
+/** Spoken while guidance is on screen: outdoor guiding or any indoor instruction. */
+const spokenGuidance = computed(() => {
+  if (!pageOpen.value) return null;
+  if (stage.value === 'indoor' || (stage.value === 'outdoor' && !showMapWait.value)) return instruction.value;
+  return null;
+});
+
+watch([spokenGuidance, voiceSession], ([text]) => {
+  if (text) speakGuidance(text);
 });
 
 watch(arrived, (isArrived, wasArrived) => {
@@ -440,7 +581,14 @@ watch(arrived, (isArrived, wasArrived) => {
 });
 
 watch(
-  () => [stage.value, navigation.value.walkedMeters, navigation.value.forwardHeading, heading.value, offset.value],
+  () => [
+    stage.value,
+    navigation.value.walkedMeters,
+    navigation.value.forwardHeading,
+    navigation.value.paused,
+    heading.value,
+    offset.value,
+  ],
   () => {
     syncTurnAlignment();
   },
@@ -455,6 +603,7 @@ function clearAlignTimer() {
 function syncTurnAlignment() {
   const step = currentStep(navigation.value);
   const onTurn = stage.value === 'indoor'
+    && !navigation.value.paused
     && step != null
     && step.direction !== 'straight'
     && !hasArrived(navigation.value);
@@ -481,6 +630,7 @@ function syncTurnAlignment() {
     alignTimer = null;
     const still = currentStep(navigation.value);
     const stillAligned = stage.value === 'indoor'
+      && !navigation.value.paused
       && still != null
       && still.direction !== 'straight'
       && navigation.value.walkedMeters === startedWalked
@@ -547,6 +697,15 @@ function onSimulateWalk() {
   gps.simulateWalk(3);
 }
 
+function onAtEntrance() {
+  if (stage.value !== 'outdoor') return;
+  entranceByGps.value = false;
+  stage.value = 'entrance';
+  gps.stop();
+  showEntrance.value = true;
+  announce(`Start the indoor route only when you are standing at ${entranceName.value}.`);
+}
+
 function enterIndoor() {
   const indoor = loadSelectedRoute();
   if (!indoor) {
@@ -556,12 +715,55 @@ function enterIndoor() {
   clearAlignTimer();
   navigation.value = indoor;
   turnAlignment.value = 'not a turn';
+  confirmingRestart.value = false;
   stage.value = 'indoor';
 }
 
-function onEntranceDismiss() {
+/** The indoor route starts only after the user confirms they are at the entrance. */
+function onEntranceDismiss(event: CustomEvent<{ role?: string }>) {
   showEntrance.value = false;
-  if (stage.value === 'entrance') enterIndoor();
+  if (stage.value !== 'entrance') return;
+  const role = event.detail?.role;
+  if (role === 'confirm') {
+    enterIndoor();
+  } else if (role === 'cancel') {
+    chooseAnotherDestination();
+  } else {
+    void nextTick(() => { showEntrance.value = true; });
+  }
+}
+
+function onLostWay() {
+  clearAlignTimer();
+  turnAlignment.value = 'not a turn';
+  confirmingRestart.value = false;
+  navigation.value = pauseNavigation(navigation.value);
+}
+
+function onResume() {
+  confirmingRestart.value = false;
+  navigation.value = resumeNavigation(navigation.value);
+}
+
+function onRestartConfirmed() {
+  clearAlignTimer();
+  confirmingRestart.value = false;
+  showArrival.value = false;
+  turnAlignment.value = 'not a turn';
+  navigation.value = restartFromEntrance(navigation.value, true);
+}
+
+function chooseAnotherDestination() {
+  clearAlignTimer();
+  resetVoice();
+  clearSelectedDestination();
+  confirmingRestart.value = false;
+  showEntrance.value = false;
+  showArrival.value = false;
+  turnAlignment.value = 'not a turn';
+  navigation.value = resetNavigation(navigation.value);
+  stage.value = 'outdoor';
+  backToDestinations();
 }
 
 function onMoveForward() {
@@ -584,6 +786,12 @@ function onSetForward() {
 function onReset() {
   if (isOutdoor.value) {
     gps.reset();
+    return;
+  }
+  // Restarting the indoor route goes through the same entrance confirmation as "I lost my way".
+  if (!arrived.value) {
+    onLostWay();
+    confirmingRestart.value = true;
     return;
   }
   clearAlignTimer();
@@ -616,6 +824,7 @@ function onArrivalDismiss(event: CustomEvent<{ role?: string }>) {
 
 function endSession() {
   clearAlignTimer();
+  resetVoice();
   gps.stop();
   void closeCamera();
   stopHeading();
@@ -636,8 +845,10 @@ onIonViewDidEnter(() => {
   showArrival.value = false;
   showEntrance.value = false;
   turnAlignment.value = 'not a turn';
+  confirmingRestart.value = false;
   wentBackground = false;
   pageOpen.value = true;
+  voiceSession.value += 1;
   void openCamera();
   stopHeading();
   stopHeading = watchHeading((value) => {
@@ -652,11 +863,13 @@ onIonViewDidEnter(() => {
       setCameraChrome(false);
       void stopRearPreview();
       gps.pause();
+      resetVoice();
       return;
     }
     // Android also reports "active" after permission dialogs close; only resume after a real background trip.
     if (!wentBackground) return;
     wentBackground = false;
+    voiceSession.value += 1;
     void openCamera();
     if (stage.value === 'outdoor') void gps.resume();
   }).then((handle) => {
@@ -977,6 +1190,76 @@ onUnmounted(endSession);
   font-size: 18px;
 }
 
+.indoor-help {
+  margin-top: 12px;
+}
+
+.scope-note,
+.option-hint {
+  margin: 0 0 8px;
+  color: #5d738a;
+  font-size: 13px;
+  line-height: 1.4;
+  text-align: center;
+}
+
+.option-hint {
+  margin: -2px 0 10px;
+}
+
+.indoor-help ion-button {
+  --border-radius: 12px;
+  margin: 0 0 8px;
+  text-transform: none;
+  font-weight: 700;
+}
+
+.indoor-help ion-button:not([fill]),
+.indoor-help ion-button[fill='solid'] {
+  --background: #1d4ed8;
+}
+
+.indoor-controls {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.indoor-controls ion-button {
+  min-height: 48px;
+}
+
+.indoor-help ion-button[fill='outline'] {
+  --color: #1d4ed8;
+  --border-color: #b9cbe2;
+  --background: #fff;
+}
+
+.indoor-help ion-button[fill='clear'] {
+  --color: #1d4ed8;
+}
+
+.recovery {
+  padding: 16px;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 8px 20px rgba(15, 42, 74, 0.06);
+}
+
+.recovery h2 {
+  margin: 0 0 6px;
+  color: #12263f;
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.recovery p:not(.option-hint) {
+  margin: 0 0 14px;
+  color: #35586d;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
 .debug {
   margin: 14px 0 24px;
 }
@@ -1019,6 +1302,23 @@ onUnmounted(endSession);
 .debug-actions ion-button.reset {
   grid-column: 1 / -1;
 }
+.header-logo { width: 30px; height: 34px; object-fit: contain; flex-shrink: 0; }
+.camera-frame { height: clamp(280px, 44dvh, 460px); margin: 0; }
+.corner { display: none; }
+.guidance-sheet { position: relative; margin-top: -12px; padding-top: 18px; padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px)); border-radius: 28px 28px 0 0; background: rgba(248, 252, 255, .96); box-shadow: 0 -8px 28px #05274820; }
+.guidance-sheet::before { content: ''; position: absolute; top: 8px; left: 50%; transform: translateX(-50%); width: 38px; height: 4px; border-radius: 8px; background: #c6d3e1; }
+.journey-card { padding: 8px 2px 12px; }
+.journey-identity { display: flex; align-items: center; gap: 12px; }
+.journey-identity > div { min-width: 0; }
+.journey-pin { width: 48px; height: 48px; flex-shrink: 0; display: grid; place-items: center; border-radius: 50%; color: #fff; background: linear-gradient(135deg,#00aff5,#1258bb); box-shadow: 0 4px 14px #0089df25; }
+.journey-pin ion-icon { font-size: 27px; }
+.journey-identity h2 { margin: 3px 0; color: #102e52; font-size: 19px; font-weight: 800; overflow-wrap: anywhere; }
+.journey-identity p { margin: 0; color: #68829e; font-size: 12px; }
+.journey-identity p strong { color: #1263dd; }
+.journey-instruction { display: flex; align-items: center; gap: 10px; border-top: 1px solid #dce8f3; margin-top: 14px; padding-top: 12px; color: #18385c; font-size: 13px; line-height: 1.5; }
+.journey-instruction ion-icon { flex-shrink: 0; padding: 9px; background: #e1f1ff; color: #1672d6; font-size: 19px; border-radius: 50%; }
+.guidance-sheet .path-note { border-radius: 12px; background: #e3f3ff; color: #166cc7; padding: 10px; font-size: 12px; text-align: center; }
+@media (max-width: 380px) { .journey-identity h2 { font-size: 17px; } .camera-frame { height: 300px; } }
 </style>
 
 <style>
@@ -1033,4 +1333,5 @@ html.camera-nav-active ion-content.nav-content::part(background) {
   --background: transparent;
   --ion-background-color: transparent;
 }
+.header-logo { width: 30px; height: 34px; object-fit: contain; flex-shrink: 0; }
 </style>

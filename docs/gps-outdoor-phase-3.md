@@ -125,9 +125,12 @@ The final destination (for example Registrar Office) is separate from the outdoo
 No MINSU coordinates were invented. Every `outdoorTarget` has `latitude: null` and `longitude: null`, marked
 `TEST: replace with surveyed coordinate`. Until real values are added:
 
-- **REAL GPS:** tap **Place Test Target**. A TEST target is placed 30 m ahead of the current position, in the
-  direction the phone faces. It is labeled `TEST target` on screen and `(TEST)` in debug.
-- **SIMULATED GPS:** the target is the deliberately fake point 0°, 0° in the ocean. The simulated user starts 40 m away.
+- **Release build (APK):** the screen says "Entrance location not set" and asks the user to walk to the
+  entrance and tap **I'm at the entrance**. The entrance prompt then says GPS could not check it. Nothing is
+  assumed: the indoor route still starts only after the user confirms.
+- **Dev mode, REAL GPS:** tap **Place Test Target** in Debug. A TEST target is placed 30 m ahead of the current
+  position, in the direction the phone faces. It is labeled `TEST target` on screen and `(TEST)` in debug.
+- **Dev mode, SIMULATED GPS:** the target is the deliberately fake point 0°, 0° in the ocean. The simulated user starts 40 m away.
 
 Once surveyed values are entered, the target is used directly. No Place Test Target step and no Set Forward are needed outdoors.
 
@@ -201,13 +204,22 @@ Leaving the radius resets confirmation. Inaccurate readings inside the radius ho
 
 ## Outdoor-to-indoor transition
 
-1. Stable arrival stops the GPS watcher.
-2. Alert: "You have reached Administration Building." / "Continue to Registrar Office."
-3. **Continue** switches the page to INDOOR mode with the existing fixed route for that destination.
-4. The camera keeps running. Indoors, Set Forward calibrates the route and turns complete by heading alignment.
+1. Stable arrival stops the GPS watcher. GPS only shows that the user is near the entrance; it says
+   nothing about where they are inside the building.
+2. Alert: "Are you at Administration Building Entrance?" explains this and asks the user to start only
+   while standing at the entrance.
+3. **Start indoor route** switches the page to INDOOR mode with the existing fixed route for that
+   destination. **Choose another destination** clears the selection and returns to the list.
+4. The camera keeps running. Indoors, the route does not move until Set Forward is tapped, and turns
+   complete by heading alignment. "I lost my way" pauses guidance (see
+   [indoor-navigation-scope.md](indoor-navigation-scope.md)).
 5. Final alert: "You have reached Registrar Office." **Done** returns to the destination list.
 
 ## Debug panel
+
+Shown only by `npm run dev` (`SHOW_DEV_TOOLS` in `src/config/dev-tools.ts`). Release builds and APKs hide the
+panel, simulated GPS, and Place Test Target. **Set Forward** and **Move Forward** are regular indoor buttons in
+every build, because they are how the user moves through the fixed route.
 
 Outdoors the panel shows:
 
@@ -226,7 +238,7 @@ Outdoor debug buttons:
 - **Sim Accuracy 5 m / 40 m**
 - **Reset**
 
-Indoors the Phase 2 panel and buttons are unchanged.
+Indoors the panel keeps the readout plus **Next Step**, **Turn Right**, and **Reset**.
 
 ## Testing
 

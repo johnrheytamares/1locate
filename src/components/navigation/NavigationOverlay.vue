@@ -1,9 +1,9 @@
 <template>
   <div class="overlay" aria-hidden="true">
-    <p class="guide">{{ instruction }}</p>
+    <p v-if="instruction" class="guide">{{ instruction }}</p>
     <div class="path-shift" :style="shiftStyle">
+    <DestinationMarker :name="destinationName" :distance-label="distanceLabel" />
     <div class="lane">
-      <DestinationMarker :name="destinationName" :distance-label="distanceLabel" />
       <div
         v-for="arrow in farToNear"
         :key="arrow.id"
@@ -54,7 +54,7 @@ const farToNear = computed(() => {
   const count = props.arrows.length;
   return props.arrows.map((arrow, index) => ({
     ...arrow,
-    scale: 0.82 + ((count - 1 - index) * 0.1),
+    scale: count <= 1 ? 1 : 0.4 + ((count - 1 - index) / (count - 1)) * 0.85,
   })).reverse();
 });
 </script>
@@ -82,6 +82,9 @@ const farToNear = computed(() => {
 }
 
 .path-shift {
+  position: relative;
+  width: min(100%, 340px);
+  height: 100%;
   transform-origin: center 88%;
   transition: transform 100ms linear;
 }
@@ -90,17 +93,26 @@ const farToNear = computed(() => {
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: space-between;
+  position: absolute;
+  bottom: 0;
+  left: 0;
   gap: 0;
-  width: min(280px, 86%);
-  margin-bottom: 8px;
-  transform: perspective(520px) rotateX(46deg);
+  width: 100%;
+  height: 72%;
+  padding: 0 0 10px;
+  transform: perspective(620px) rotateX(32deg);
   transform-origin: center bottom;
 }
 
 .slot {
   display: flex;
   justify-content: center;
-  margin-top: -10px;
+  position: relative;
+  z-index: 1;
+  transform-origin: center;
+  flex: 0 1 auto;
+  min-height: 0;
 }
 
 .slot:last-child {
@@ -116,4 +128,7 @@ const farToNear = computed(() => {
   align-self: flex-end;
   margin-right: 28px;
 }
+.lane::before { content: ''; position: absolute; inset: 0 -12px -20px; background: linear-gradient(180deg, transparent, #00b9ff10 20%, #00b9ff50); clip-path: polygon(48% 0, 52% 0, 90% 100%, 10% 100%); filter: blur(5px); }
+.path-shift > :deep(.marker) { position: absolute; top: 4%; left: 50%; transform: translateX(-50%); z-index: 2; }
+@media (prefers-reduced-motion: reduce) { .path-shift { transition: none; } }
 </style>

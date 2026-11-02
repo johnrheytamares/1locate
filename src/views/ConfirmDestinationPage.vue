@@ -5,7 +5,7 @@
         <ion-buttons slot="start">
           <ion-back-button default-href="/destinations" text="" color="dark" />
         </ion-buttons>
-        <ion-title>Confirm Destination</ion-title>
+        <ion-title><span class="confirm-brand"><img src="/images/1locate-logo.png" alt="" />Confirm Destination</span></ion-title>
       </ion-toolbar>
     </ion-header>
 
@@ -84,6 +84,7 @@
         </section>
 
         <div class="actions">
+          <ion-button v-if="destination.details?.roomId" expand="block" fill="outline" class="back" :router-link="{ path: '/indoor-map', query: { room: destination.details.roomId } }">Plan a floor-map route</ion-button>
           <ion-button expand="block" class="start" data-test="start" @click="onStart">
             <ion-icon slot="start" :icon="paperPlaneOutline" aria-hidden="true" />
             Start Navigation
@@ -429,4 +430,6 @@ function onBack() {
   --color: #1d4ed8;
   --background: #ffffff;
 }
+.confirm-brand { display: flex; align-items: center; gap: 8px; font-size: 16px; }
+.confirm-brand img { width: 28px; height: 32px; object-fit: contain; }
 </style>
