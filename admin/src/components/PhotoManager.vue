@@ -1,8 +1,8 @@
 <template>
   <section class="section" data-test="photo-manager">
-    <h3>Photos</h3>
+    <h3>{{ kind === 'building' ? 'Building Photos' : 'Photos' }}</h3>
     <p class="muted" style="font-size: 13px">
-      JPEG, PNG, or WebP, up to 5 MB each. Photos show in the app only while this {{ kind }} is published.
+      JPEG, PNG, or WebP (Max 5 MB each). Photos show in the app only while this {{ kind }} is published.
     </p>
 
     <p v-if="error" class="notice error" role="alert" data-test="photo-error">{{ error }}</p>
@@ -10,11 +10,13 @@
     <p v-if="notice" class="notice ok">{{ notice }}</p>
 
     <form class="upload" @submit.prevent="onUpload">
-      <div class="field">
-        <label :for="`photo-file-${parentId}`">Choose photo</label>
+      <div class="field file-field">
+        <p class="drop-copy">Add a photo</p>
+        <label class="choose" :for="`photo-file-${parentId}`">Choose Files</label>
         <input
           :id="`photo-file-${parentId}`"
           ref="fileInput"
+          class="file-input"
           type="file"
           :accept="ACCEPTED_IMAGE_TYPES"
           data-test="photo-file"
@@ -34,26 +36,29 @@
 
     <p v-if="loading" class="muted">Loading photos...</p>
     <p v-else-if="photos.length === 0" class="empty" data-test="photo-empty">No photos yet.</p>
-    <ul v-else class="photos">
-      <li v-for="(photo, index) in photos" :key="photo.id" data-test="photo-item">
-        <img
-          v-if="cache.url(photo.storagePath)"
-          :src="cache.url(photo.storagePath)!"
-          :alt="photo.caption ?? 'Photo'"
-          @error="onImageError(photo.storagePath)"
-        />
-        <div v-else class="thumb-placeholder">Preview unavailable</div>
-        <input v-model="captions[photo.id]" maxlength="200" :aria-label="`Caption for photo ${index + 1}`" />
-        <div class="row-actions">
-          <button class="ghost small" type="button" :disabled="busyId !== null || index === 0" aria-label="Move up" @click="onMove(index, index - 1)">↑</button>
-          <button class="ghost small" type="button" :disabled="busyId !== null || index === photos.length - 1" aria-label="Move down" @click="onMove(index, index + 1)">↓</button>
-          <button class="secondary small" type="button" :disabled="busyId !== null || (captions[photo.id] ?? '') === (photo.caption ?? '')" @click="onSaveCaption(photo)">
-            Save caption
-          </button>
-          <button class="danger small" type="button" :disabled="busyId !== null" data-test="photo-delete" @click="pendingDelete = photo">Delete</button>
-        </div>
-      </li>
-    </ul>
+    <div v-else-if="current" class="viewer" data-test="photo-item">
+      <div class="pager">
+        <button class="ghost small icon-nav" type="button" aria-label="Previous photo" :disabled="photoIndex === 0" @click="step(-1)">&lt;</button>
+        <span>{{ photoIndex + 1 }} / {{ photos.length }}</span>
+        <button class="ghost small icon-nav" type="button" aria-label="Next photo" :disabled="photoIndex >= photos.length - 1" @click="step(1)">&gt;</button>
+      </div>
+      <img
+        v-if="cache.url(current.storagePath)"
+        :src="cache.url(current.storagePath)!"
+        :alt="current.caption ?? 'Photo'"
+        @error="onImageError(current.storagePath)"
+      />
+      <div v-else class="thumb-placeholder">Preview unavailable</div>
+      <input v-model="captions[current.id]" maxlength="200" :aria-label="`Caption for photo ${photoIndex + 1}`" />
+      <div class="row-actions">
+        <button class="ghost small" type="button" :disabled="busyId !== null || photoIndex === 0" aria-label="Move up" @click="onMove(photoIndex, photoIndex - 1)">↑</button>
+        <button class="ghost small" type="button" :disabled="busyId !== null || photoIndex >= photos.length - 1" aria-label="Move down" @click="onMove(photoIndex, photoIndex + 1)">↓</button>
+        <button class="secondary small" type="button" :disabled="busyId !== null || (captions[current.id] ?? '') === (current.caption ?? '')" @click="onSaveCaption(current)">
+          Save caption
+        </button>
+        <button class="danger small" type="button" :disabled="busyId !== null" data-test="photo-delete" @click="pendingDelete = current">Delete</button>
+      </div>
+    </div>
 
     <ConfirmDialog
       v-if="pendingDelete"
@@ -70,7 +75,7 @@
 </template>
 
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
 import { createSignedUrlCache } from '@/composables/useSignedUrls';
 import { describeError } from '@/lib/errors';
@@ -105,6 +110,13 @@ const selectedFile = ref<File | null>(null);
 const previewUrl = ref<string | null>(null);
 const fileInput = ref<HTMLInputElement | null>(null);
 const pendingDelete = ref<Photo | null>(null);
+const photoIndex = ref(0);
+const current = computed(() => photos.value[photoIndex.value] ?? null);
+
+function step(delta: number) {
+  const next = photoIndex.value + delta;
+  if (next >= 0 && next < photos.value.length) photoIndex.value = next;
+}
 
 const cache = createSignedUrlCache((paths) => signPhotoUrls(props.kind, paths));
 let renewTimer: ReturnType<typeof setInterval> | null = null;
@@ -119,6 +131,7 @@ function resetMessages() {
 function setPhotos(list: Photo[]) {
   photos.value = list;
   for (const photo of list) captions[photo.id] = photo.caption ?? '';
+  if (photoIndex.value > list.length - 1) photoIndex.value = Math.max(0, list.length - 1);
 }
 
 async function refreshUrls() {
@@ -173,6 +186,7 @@ async function onUpload() {
   try {
     const photo = await uploadPhoto(props.kind, props.parentId, selectedFile.value, caption.value, nextSortOrder(photos.value));
     setPhotos([...photos.value, photo]);
+    photoIndex.value = photos.value.length - 1;
     clearSelection();
     notice.value = 'Photo uploaded.';
     await refreshUrls();
@@ -264,13 +278,40 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
+h3 { margin-bottom: 2px; font-size: 0.95rem; }
+.section > .muted { margin-bottom: 6px; font-size: 12px; line-height: 1.3; }
 .upload {
   display: grid;
-  gap: 10px;
-  padding: 12px;
-  border: 1px dashed var(--line);
+  gap: 6px;
+  padding: 8px;
+  border: 1px dashed #93c5fd;
   border-radius: 10px;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
+  background: #fff;
+  text-align: center;
+}
+.upload button { height: 32px; padding: 4px 10px; }
+.file-field { position: relative; align-items: center; }
+.drop-copy { margin: 0; color: var(--muted); font-size: 13px; }
+.choose {
+  display: inline-flex;
+  align-items: center;
+  height: 34px;
+  padding: 0 12px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--navy);
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+}
+.file-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
 }
 
 .preview {
@@ -280,27 +321,26 @@ onBeforeUnmount(() => {
   object-fit: cover;
 }
 
-.photos {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 12px;
-}
-
-.photos li {
+.viewer {
   display: grid;
   gap: 6px;
   padding: 8px;
   border: 1px solid var(--line);
   border-radius: 10px;
 }
-
-.photos img,
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 700;
+}
+.icon-nav { width: 32px; height: 32px; padding: 0; }
+.viewer img,
 .thumb-placeholder {
   width: 100%;
-  aspect-ratio: 4 / 3;
+  height: 140px;
   border-radius: 8px;
   object-fit: cover;
   background: var(--blue-soft);

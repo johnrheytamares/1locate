@@ -1,19 +1,44 @@
 <template>
   <div>
-    <header class="page-header">
-      <div>
-        <h1>Rooms / Offices</h1>
-        <p>A room appears in the mobile picker only after it is linked to a destination with a route.</p>
+    <header class="page-header catalog-head">
+      <div class="title-row">
+        <span class="page-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path fill="currentColor" d="M3 11 12 4l9 7v9h-6v-6H9v6H3v-9z"/></svg>
+        </span>
+        <div>
+          <h1>Rooms Management</h1>
+          <p>Manage campus rooms and their locations. A room appears in the app after it is linked to a destination.</p>
+        </div>
       </div>
-      <button type="button" data-test="new-room" :disabled="buildings.length === 0" @click="openCreate">New room</button>
     </header>
+
+    <div class="mini-stats">
+      <article class="stat card tone-blue">
+        <span class="stat-icon" style="color:#1d4ed8" aria-hidden="true"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M3 11 12 4l9 7v9h-6v-6H9v6H3v-9z"/></svg></span>
+        <div><strong>{{ rooms.length }}</strong><span>Total Rooms</span></div>
+      </article>
+      <article class="stat card tone-green">
+        <span class="stat-icon" style="color:#16a34a" aria-hidden="true"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z"/></svg></span>
+        <div><strong>{{ publishedRooms }}</strong><span>Published</span></div>
+      </article>
+      <article class="stat card tone-slate">
+        <span class="stat-icon" style="color:#475569" aria-hidden="true"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 6.5c-5 0-8.3 4.2-9.2 5.5.9 1.3 4.2 5.5 9.2 5.5s8.3-4.2 9.2-5.5C20.3 10.7 17 6.5 12 6.5z"/><path stroke="currentColor" stroke-width="1.8" d="M5 6l14 13"/></svg></span>
+        <div><strong>{{ rooms.length - publishedRooms }}</strong><span>Unpublished</span></div>
+      </article>
+    </div>
 
     <p v-if="error" class="notice error" role="alert" data-test="page-error">{{ error }}</p>
     <p v-if="notice" class="notice ok" data-test="page-notice">{{ notice }}</p>
     <p v-if="!loading && buildings.length === 0" class="notice">Add a building first.</p>
 
-    <div class="toolbar">
-      <input v-model="filters.search" type="search" placeholder="Search name or room number" aria-label="Search rooms" data-test="search" />
+    <div class="add-row">
+      <button type="button" data-test="new-room" :disabled="buildings.length === 0" @click="openCreate">+ Add Room</button>
+    </div>
+    <div class="toolbar list-toolbar">
+      <label class="search-field">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M10 4a6 6 0 1 0 3.7 10.7l4.3 4.3 1.4-1.4-4.3-4.3A6 6 0 0 0 10 4zm0 2a4 4 0 1 1 0 8 4 4 0 0 1 0-8z" /></svg>
+        <input v-model="filters.search" type="search" placeholder="Search name or room number" aria-label="Search rooms" data-test="search" />
+      </label>
       <select v-model="filters.buildingId" aria-label="Filter by building" data-test="filter-building">
         <option value="">All buildings</option>
         <option v-for="building in buildings" :key="building.id" :value="building.id">{{ building.name }}</option>
@@ -37,28 +62,33 @@
     <div v-else-if="filtered.length === 0" class="table-wrap">
       <p class="empty" data-test="empty">{{ rooms.length === 0 ? 'No rooms yet.' : 'No rooms match the filters.' }}</p>
     </div>
-    <div v-else class="table-wrap">
+    <div v-else class="table-wrap data-table">
       <table>
         <thead>
-          <tr><th>Name</th><th>Room no.</th><th>Type</th><th>Building / Floor</th><th>Status</th><th>Navigation</th><th></th></tr>
+          <tr><th>Name</th><th>Room no.</th><th>Type</th><th>Building / Floor</th><th>Status</th><th>Navigation</th><th class="actions-head">Actions</th></tr>
         </thead>
         <tbody>
           <tr v-for="room in filtered" :key="room.id" data-test="room-row">
-            <td>{{ room.name }}</td>
-            <td>{{ room.room_number ?? '—' }}</td>
-            <td>{{ ROOM_TYPE_LABELS[room.type] }}</td>
-            <td>{{ buildingName(room.building_id) }}<br /><span class="muted">{{ floorName(room.floor_id) }}</span></td>
-            <td><span class="badge" :class="room.is_active ? 'ok' : 'off'">{{ room.is_active ? 'Published' : 'Draft' }}</span></td>
-            <td>
+            <td class="name-cell" data-label="Name">{{ room.name }}</td>
+            <td data-label="Room no.">{{ room.room_number ?? '—' }}</td>
+            <td data-label="Type">{{ ROOM_TYPE_LABELS[room.type] }}</td>
+            <td data-label="Building / Floor">{{ buildingName(room.building_id) }}<br /><span class="muted">{{ floorName(room.floor_id) }}</span></td>
+            <td data-label="Status"><span class="badge" :class="room.is_active ? 'ok' : 'off'">{{ room.is_active ? 'Published' : 'Draft' }}</span></td>
+            <td data-label="Navigation">
               <span v-if="linkedDestination(room.id)" class="badge ok">Linked: {{ linkedDestination(room.id) }}</span>
               <span v-else class="badge warn" data-test="not-navigable">Not yet available for navigation</span>
             </td>
-            <td class="actions">
-              <button class="ghost small" type="button" @click="openEdit(room)">Edit</button>
-              <button class="ghost small" type="button" :disabled="busy" @click="togglePublished(room)">
-                {{ room.is_active ? 'Unpublish' : 'Publish' }}
+            <td class="actions" data-label="Actions">
+              <button class="ghost small icon-btn" type="button" aria-label="Edit" title="Edit" @click="openEdit(room)">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3 17.2V21h3.8l11-11-3.8-3.8-11 11zM20.7 7.1a1 1 0 0 0 0-1.4l-2.4-2.4a1 1 0 0 0-1.4 0l-1.8 1.8 3.8 3.8 1.8-1.8z"/></svg>
               </button>
-              <button class="ghost small error" type="button" :disabled="busy" @click="askDelete(room)">Delete</button>
+              <button class="ghost small icon-btn" type="button" :class="{ 'is-hidden': !room.is_active }" :disabled="busy" :aria-label="room.is_active ? 'Unpublish' : 'Publish'" :title="room.is_active ? 'Shown. Click to hide.' : 'Hidden. Click to show.'" @click="togglePublished(room)">
+                <svg v-if="room.is_active" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 6.5c-5 0-8.3 4.2-9.2 5.5.9 1.3 4.2 5.5 9.2 5.5s8.3-4.2 9.2-5.5c-.9-1.3-4.2-5.5-9.2-5.5zm0 9a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"/></svg>
+                <svg v-else viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 6.5c-5 0-8.3 4.2-9.2 5.5.9 1.3 4.2 5.5 9.2 5.5s8.3-4.2 9.2-5.5c-.9-1.3-4.2-5.5-9.2-5.5zm0 9a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"/><path stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M5 6l14 13"/></svg>
+              </button>
+              <button class="ghost small error icon-btn" type="button" :disabled="busy" aria-label="Delete" title="Delete" @click="askDelete(room)">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M9 3h6l1 2h4v2H4V5h4l1-2zm1 6h2v9h-2V9zm4 0h2v9h-2V9zM7 9h2v9H7V9z"/></svg>
+              </button>
             </td>
           </tr>
         </tbody>
@@ -66,9 +96,17 @@
     </div>
 
     <div v-if="editing" class="overlay" role="dialog" aria-modal="true" aria-label="Room form">
-      <div class="dialog">
+      <div class="dialog room-dialog">
+        <div class="dialog-title">
+          <div>
+            <h2>{{ editing.id ? 'Edit Room' : 'Add Room' }}</h2>
+            <p class="muted">{{ editing.id ? 'Update this room.' : 'Add a room to a building.' }}</p>
+          </div>
+          <button class="ghost icon-btn" type="button" aria-label="Close" :disabled="saving" @click="editing = null">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M6.4 5 12 10.6 17.6 5 19 6.4 13.4 12 19 17.6 17.6 19 12 13.4 6.4 19 5 17.6 10.6 12 5 6.4z"/></svg>
+          </button>
+        </div>
         <form novalidate data-test="room-form" @submit.prevent="onSave">
-          <h2>{{ editing.id ? 'Edit room / office' : 'New room / office' }}</h2>
           <p v-if="formError" class="notice error" role="alert" data-test="form-error">{{ formError }}</p>
           <div class="form-grid">
             <FormField v-slot="{ id }" name="buildingId" label="Building" :error="errors.buildingId" required>
@@ -105,8 +143,7 @@
             </div>
           </div>
           <div class="form-actions">
-            <button class="secondary" type="button" :disabled="saving" @click="editing = null">Close</button>
-            <button type="submit" :disabled="saving" data-test="save">{{ saving ? 'Saving...' : 'Save' }}</button>
+            <button type="submit" :disabled="saving" data-test="save">{{ saving ? 'Saving...' : 'Save Room' }}</button>
           </div>
         </form>
         <PhotoManager v-if="editing.id" kind="room" :parent-id="editing.id" />
@@ -139,7 +176,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue';
+import { computed, getCurrentInstance, onMounted, reactive, ref, watch } from 'vue';
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
 import FormField from '@/components/FormField.vue';
 import PhotoManager from '@/components/PhotoManager.vue';
@@ -160,6 +197,7 @@ import { ROOM_TYPES, ROOM_TYPE_LABELS, type Building, type DestinationRecord, ty
 const buildings = ref<Building[]>([]);
 const floors = ref<Floor[]>([]);
 const rooms = ref<Room[]>([]);
+const publishedRooms = computed(() => rooms.value.filter((room) => room.is_active).length);
 const destinations = ref<DestinationRecord[]>([]);
 const loading = ref(true);
 const busy = ref(false);
@@ -333,5 +371,10 @@ async function onDelete() {
   }
 }
 
-onMounted(load);
+const page = getCurrentInstance();
+onMounted(async () => {
+  await load();
+  const create = page?.appContext.config.globalProperties.$route?.query?.create;
+  if (create === '1' && buildings.value.length > 0) openCreate();
+});
 </script>

@@ -88,6 +88,16 @@ export interface DestinationRecord {
   indoor_route: RouteStepRecord[] | null;
 }
 
+export interface MapLabel {
+  id: string;
+  name: string;
+  category: string;
+  building_id: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  is_active: boolean;
+}
+
 export interface UserRoleRecord {
   user_id: string;
   role: AppRole;

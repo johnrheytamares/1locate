@@ -1,25 +1,63 @@
 <template>
   <div>
-    <header class="page-header">
-      <div>
-        <h1>Buildings</h1>
-        <p>New buildings start unpublished. Publish a building when its details are verified.</p>
+    <header class="page-header buildings-head">
+      <div class="title-row">
+        <span class="page-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path fill="currentColor" d="M4 21V5l8-2 8 2v16h-6v-5H10v5H4zm4-9h2V9H8v3zm6 0h2V9h-2v3z"/></svg>
+        </span>
+        <div>
+          <h1>Buildings Management</h1>
+          <p>Manage campus buildings and information.</p>
+        </div>
       </div>
-      <button type="button" data-test="new-building" @click="openCreate">New building</button>
     </header>
+
+    <div class="stats">
+      <article class="stat card tone-blue">
+        <span class="stat-icon blue" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path fill="currentColor" d="M4 21V5l8-2 8 2v16h-6v-5H10v5H4z"/></svg>
+        </span>
+        <div>
+          <strong>{{ buildings.length }}</strong>
+          <span>Total Buildings</span>
+        </div>
+      </article>
+      <article class="stat card tone-green">
+        <span class="stat-icon green" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path fill="currentColor" d="M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z"/></svg>
+        </span>
+        <div>
+          <strong>{{ publishedCount }}</strong>
+          <span>Published</span>
+        </div>
+      </article>
+      <article class="stat card tone-slate">
+        <span class="stat-icon slate" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 6.5c-5 0-8.3 4.2-9.2 5.5.9 1.3 4.2 5.5 9.2 5.5s8.3-4.2 9.2-5.5C20.3 10.7 17 6.5 12 6.5zm0 9a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"/><path stroke="currentColor" stroke-width="1.8" d="M5 6l14 13"/></svg>
+        </span>
+        <div>
+          <strong>{{ buildings.length - publishedCount }}</strong>
+          <span>Unpublished</span>
+        </div>
+      </article>
+    </div>
 
     <p v-if="error" class="notice error" role="alert" data-test="page-error">{{ error }}</p>
     <p v-if="notice" class="notice ok" data-test="page-notice">{{ notice }}</p>
 
-    <div class="toolbar">
-      <input v-model="search" type="search" placeholder="Search code or name" aria-label="Search buildings" data-test="search" />
+    <div class="toolbar building-toolbar">
+      <label class="search-field">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M10 4a6 6 0 1 0 3.7 10.7l4.3 4.3 1.4-1.4-4.3-4.3A6 6 0 0 0 10 4zm0 2a4 4 0 1 1 0 8 4 4 0 0 1 0-8z" /></svg>
+        <input v-model="search" type="search" placeholder="Search buildings..." aria-label="Search buildings" data-test="search" />
+      </label>
+      <button type="button" data-test="new-building" @click="openCreate">+ Add Building</button>
     </div>
 
     <p v-if="loading" class="muted">Loading buildings...</p>
     <div v-else-if="filtered.length === 0" class="table-wrap">
       <p class="empty" data-test="empty">{{ buildings.length === 0 ? 'No buildings yet. Add the first one.' : 'No buildings match the search.' }}</p>
     </div>
-    <div v-else class="table-wrap">
+    <div v-else class="table-wrap building-table">
       <table>
         <thead>
           <tr>
@@ -28,27 +66,32 @@
             <th>Entrance</th>
             <th>Radius</th>
             <th>Status</th>
-            <th></th>
+            <th class="actions-head">Actions</th>
           </tr>
         </thead>
         <tbody>
           <tr v-for="building in filtered" :key="building.id" data-test="building-row">
-            <td class="mono">{{ building.code }}</td>
-            <td>{{ building.name }}</td>
-            <td>
+            <td data-label="Code"><span class="code-pill">{{ building.code }}</span></td>
+            <td class="name-cell" data-label="Name">{{ building.name }}</td>
+            <td data-label="Entrance">
               <span v-if="building.entrance_lat !== null">{{ building.entrance_lat }}, {{ building.entrance_lng }}</span>
               <span v-else class="badge warn">Not surveyed</span>
             </td>
-            <td>{{ building.arrival_radius }} m</td>
-            <td>
+            <td data-label="Radius">{{ building.arrival_radius }} m</td>
+            <td data-label="Status">
               <span class="badge" :class="building.is_active ? 'ok' : 'off'">{{ building.is_active ? 'Published' : 'Draft' }}</span>
             </td>
-            <td class="actions">
-              <button class="ghost small" type="button" @click="openEdit(building)">Edit</button>
-              <button class="ghost small" type="button" :disabled="busy" data-test="toggle-publish" @click="togglePublished(building)">
-                {{ building.is_active ? 'Unpublish' : 'Publish' }}
+            <td class="actions" data-label="Actions">
+              <button class="ghost small icon-btn" type="button" aria-label="Edit" title="Edit" @click="openEdit(building)">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3 17.2V21h3.8l11-11-3.8-3.8-11 11zM20.7 7.1a1 1 0 0 0 0-1.4l-2.4-2.4a1 1 0 0 0-1.4 0l-1.8 1.8 3.8 3.8 1.8-1.8z"/></svg>
               </button>
-              <button class="ghost small error" type="button" :disabled="busy" data-test="delete" @click="askDelete(building)">Delete</button>
+              <button class="ghost small icon-btn" type="button" :class="{ 'is-hidden': !building.is_active }" :disabled="busy" data-test="toggle-publish" :aria-label="building.is_active ? 'Unpublish' : 'Publish'" :title="building.is_active ? 'Shown. Click to hide.' : 'Hidden. Click to show.'" @click="togglePublished(building)">
+                <svg v-if="building.is_active" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 6.5c-5 0-8.3 4.2-9.2 5.5.9 1.3 4.2 5.5 9.2 5.5s8.3-4.2 9.2-5.5c-.9-1.3-4.2-5.5-9.2-5.5zm0 9a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"/></svg>
+                <svg v-else viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 6.5c-5 0-8.3 4.2-9.2 5.5.9 1.3 4.2 5.5 9.2 5.5s8.3-4.2 9.2-5.5c-.9-1.3-4.2-5.5-9.2-5.5zm0 9a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"/><path stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M5 6l14 13"/></svg>
+              </button>
+              <button class="ghost small error icon-btn" type="button" :disabled="busy" data-test="delete" aria-label="Delete" title="Delete" @click="askDelete(building)">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M9 3h6l1 2h4v2H4V5h4l1-2zm1 6h2v9h-2V9zm4 0h2v9h-2V9zM7 9h2v9H7V9z"/></svg>
+              </button>
             </td>
           </tr>
         </tbody>
@@ -56,10 +99,19 @@
     </div>
 
     <div v-if="editing" class="overlay" role="dialog" aria-modal="true" aria-label="Building form">
-      <div class="dialog">
+      <div class="dialog building-dialog">
       <form novalidate data-test="building-form" @submit.prevent="onSave">
-        <h2>{{ editing.id ? 'Edit building' : 'New building' }}</h2>
+        <div class="dialog-title">
+          <div>
+            <h2>{{ editing.id ? 'Edit Building' : 'Add Building' }}</h2>
+            <p class="muted">{{ editing.id ? 'Update this building.' : 'Add a new building to the campus.' }}</p>
+          </div>
+          <button class="ghost icon-btn" type="button" aria-label="Close" @click="closeForm">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M6.4 5 12 10.6 17.6 5 19 6.4 13.4 12 19 17.6 17.6 19 12 13.4 6.4 19 5 17.6 10.6 12 5 6.4z"/></svg>
+          </button>
+        </div>
         <p v-if="formError" class="notice error" role="alert" data-test="form-error">{{ formError }}</p>
+        <div class="form-split">
         <div class="form-grid">
           <FormField v-slot="{ id }" name="code" label="Code" :error="errors.code" hint="Example: ADMIN. Letters, numbers, _ or -." required>
             <input :id="id" v-model="form.code" maxlength="20" data-test="code" />
@@ -86,16 +138,22 @@
             <input :id="id" v-model="form.sortOrder" inputmode="numeric" />
           </FormField>
           <div class="field">
-            <label class="checkbox"><input v-model="form.isActive" type="checkbox" data-test="published" /> Published</label>
+            <label for="building-status">Status</label>
+            <select id="building-status" v-model="form.isActive" data-test="published">
+              <option :value="true">Published</option>
+              <option :value="false">Unpublished</option>
+            </select>
+          </div>
+        </div>
+          <div class="photo-col">
+            <PhotoManager v-if="editing.id" kind="building" :parent-id="editing.id" />
+            <p v-else class="muted">Save the building first, then add photos.</p>
           </div>
         </div>
         <div class="form-actions">
-          <button class="secondary" type="button" :disabled="saving" @click="closeForm">Close</button>
-          <button type="submit" :disabled="saving" data-test="save">{{ saving ? 'Saving...' : 'Save' }}</button>
+          <button type="submit" :disabled="saving" data-test="save">{{ saving ? 'Saving...' : 'Save Building' }}</button>
         </div>
       </form>
-      <PhotoManager v-if="editing.id" kind="building" :parent-id="editing.id" />
-      <p v-else class="muted section">Save the building first, then add photos.</p>
       </div>
     </div>
 
@@ -124,7 +182,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, getCurrentInstance, onMounted, ref } from 'vue';
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
 import FormField from '@/components/FormField.vue';
 import PhotoManager from '@/components/PhotoManager.vue';
@@ -146,7 +204,8 @@ const busy = ref(false);
 const saving = ref(false);
 const error = ref('');
 const notice = ref('');
-const search = ref('');
+const initialQuery = getCurrentInstance()?.appContext.config.globalProperties.$route?.query?.q;
+const search = ref(typeof initialQuery === 'string' ? initialQuery : '');
 
 const editing = ref<{ id: string | null } | null>(null);
 const form = ref<BuildingForm>(emptyBuildingForm());
@@ -157,6 +216,7 @@ const pendingDelete = ref<Building | null>(null);
 const blockers = ref<BuildingDependents | null>(null);
 const checkingDelete = ref(false);
 
+const publishedCount = computed(() => buildings.value.filter((item) => item.is_active).length);
 const filtered = computed(() => {
   const needle = search.value.trim().toLowerCase();
   if (!needle) return buildings.value;
@@ -288,5 +348,114 @@ async function onDelete() {
   }
 }
 
-onMounted(load);
+const page = getCurrentInstance();
+onMounted(async () => {
+  await load();
+  const create = page?.appContext.config.globalProperties.$route?.query?.create;
+  if (create === '1') openCreate();
+});
 </script>
+
+<style scoped>
+.building-toolbar {
+  background: #eff6ff;
+  border-color: #dbeafe;
+}
+.search-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 180px;
+  min-width: 0;
+  height: 42px;
+  padding: 0 12px;
+  border-radius: 10px;
+  background: #fff;
+  border: 1px solid #bfdbfe;
+  color: #64748b;
+}
+.search-field svg { width: 16px; height: 16px; flex: 0 0 auto; }
+.search-field input {
+  border: 0;
+  height: 36px;
+  padding: 0;
+  background: transparent;
+  outline: none;
+  min-width: 0;
+}
+.search-field input:focus { outline: none; }
+.buildings-head { justify-content: flex-start; }
+.stat { display: flex; align-items: center; gap: 12px; }
+.stat-icon {
+  width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center; flex: 0 0 auto;
+}
+.stat-icon svg { width: 20px; height: 20px; }
+.stat-icon.blue { background: #fff; color: #1d4ed8; }
+.stat-icon.green { background: #fff; color: #16a34a; }
+.stat-icon.slate { background: #fff; color: #475569; }
+.tone-blue { background: #dbeafe; border-color: #bfdbfe; }
+.tone-green { background: #dcfce7; border-color: #86efac; }
+.tone-slate { background: #e2e8f0; border-color: #cbd5e1; }
+.building-table {
+  border: 0;
+  border-radius: 18px;
+  box-shadow: 0 10px 30px rgba(15, 39, 68, 0.06);
+  overflow: hidden;
+}
+.building-table :deep(table) { border-collapse: separate; border-spacing: 0; }
+.building-table :deep(th) {
+  background: #dbeafe;
+  color: #1e3a8a;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  padding: 8px 12px;
+  border-bottom: 1px solid #bfdbfe;
+}
+.building-table :deep(td) {
+  padding: 8px 12px;
+  border-bottom: 1px solid #eef2f7;
+  background: #fff;
+}
+.building-table :deep(tbody tr:hover td) { background: #f8fbff; }
+.building-table :deep(tr:last-child td) { border-bottom: 0; }
+.code-pill {
+  display: inline-flex;
+  align-items: center;
+  min-width: 36px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-weight: 800;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+}
+.name-cell { font-weight: 700; color: #0f2744; }
+.building-table :deep(th.actions-head),
+.building-table :deep(td.actions) { text-align: right; }
+.building-table :deep(td.actions) { display: flex; justify-content: flex-end; gap: 6px; }
+.icon-btn { width: 30px; height: 30px; padding: 0; }
+.icon-btn.is-hidden { color: #94a3b8; background: #f1f5f9; border-color: #e2e8f0; }
+.icon-btn svg { width: 16px; height: 16px; }
+.building-dialog { width: min(980px, 100%); }
+.dialog-title { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.form-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(220px, 0.7fr);
+  gap: 12px;
+  align-items: start;
+  margin-top: 4px;
+}
+.dialog-title { margin-bottom: 6px; }
+.dialog-title p { margin: 0; font-size: 13px; }
+.photo-col {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 8px 10px;
+  background: #f8fafc;
+}
+.form-actions { justify-content: flex-end; margin-top: 8px; }
+@media (max-width: 800px) {
+  .form-split { grid-template-columns: 1fr; }
+}
+</style>

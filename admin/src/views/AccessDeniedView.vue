@@ -24,7 +24,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useSession } from '@/stores/session';
 import { ROLE_LABELS } from '@/types';
@@ -36,6 +36,14 @@ const busy = ref(false);
 
 const adminOnly = computed(() => route.query.reason === 'admin' && session.canManageContent.value);
 const roleLabel = computed(() => (session.state.role ? ROLE_LABELS[session.state.role] : 'none'));
+
+watch(
+  () => session.canManageContent.value && route.query.reason !== 'admin',
+  (goToDashboard) => {
+    if (goToDashboard) void router.replace({ name: 'dashboard' });
+  },
+  { immediate: true },
+);
 
 async function onRetry() {
   busy.value = true;

@@ -3,66 +3,103 @@
     <ion-header class="nav-header">
       <ion-toolbar class="nav-toolbar">
         <ion-buttons slot="start">
-          <ion-back-button default-href="/destinations" />
+          <ion-back-button default-href="/destinations" text="" color="light" />
         </ion-buttons>
         <div class="brand-lockup">
-          <strong>1Locate</strong>
-          <span>Camera Navigation</span>
+          <div class="brand-title">
+            <span class="pin" aria-hidden="true"><ion-icon :icon="location" /></span>
+            <strong>1Locate</strong>
+          </div>
+          <span class="brand-sub">Camera Navigation</span>
         </div>
       </ion-toolbar>
     </ion-header>
 
-    <ion-content :scroll-y="false" class="nav-content">
-      <div class="stage">
-        <NavigationOverlay
-          :arrows="arrows"
-          :destination-name="markerName"
-          :distance-label="distanceLabel"
-          :instruction="instruction"
-          :heading-offset="pathOffset"
-        />
+    <ion-content class="nav-content">
+      <div v-if="showMapWait" class="sheet">
+        <div class="map-card" aria-hidden="true">
+          <span class="map-pin"><ion-icon :icon="location" /></span>
+        </div>
+        <h1 class="wait-title">{{ waitTitle }}</h1>
+        <p v-if="waitSubtitle" class="wait-sub">{{ waitSubtitle }}</p>
         <div v-if="isOutdoor" class="status-chips">
-          <span v-if="gpsSource === 'simulated'" class="chip sim">SIMULATED GPS</span>
-          <span v-if="outdoor.target?.source === 'test'" class="chip test">TEST target</span>
-          <span v-if="improvingAccuracy" class="chip warn">Improving GPS accuracy...</span>
-          <span v-if="gpsSource === 'real' && gpsStatus === 'tracking' && !gpsPrecise" class="chip warn">
+          <span v-if="improvingAccuracy" class="chip pill">
+            <ion-icon :icon="navigateOutline" aria-hidden="true" />
+            Improving GPS accuracy...
+            <ion-spinner name="crescent" />
+          </span>
+          <span v-if="gpsSource === 'real' && gpsStatus === 'tracking' && !gpsPrecise" class="chip pill">
             Precise location is off
           </span>
         </div>
-        <div v-if="locationPrompt && (locationPrompt.action || locationPrompt.back)" class="location-card">
+        <div v-if="locationPrompt && (locationPrompt.action || locationPrompt.back)" class="prompt-actions">
           <p v-if="locationPrompt.hint" class="hint">{{ locationPrompt.hint }}</p>
-          <ion-button v-if="locationPrompt.action" @click="onAllowLocation">{{ locationPrompt.action }}</ion-button>
-          <ion-button v-if="locationPrompt.back" fill="outline" class="back" @click="backToDestinations">
+          <ion-button v-if="locationPrompt.action" expand="block" @click="onAllowLocation">{{ locationPrompt.action }}</ion-button>
+          <ion-button v-if="locationPrompt.back" expand="block" fill="outline" class="back" @click="backToDestinations">
             Back to destinations
           </ion-button>
         </div>
-        <template v-else>
-          <p v-if="cameraMessage" class="camera-message">{{ cameraMessage }}</p>
-          <ion-button v-if="cameraMessage" class="retry" @click="openCamera">Try camera again</ion-button>
-        </template>
       </div>
-    </ion-content>
 
-    <ion-footer class="nav-footer">
-      <div class="info-card">
-        <div class="info-row">
-          <span>Destination</span>
-          <strong>{{ destinationName }}</strong>
+      <template v-else>
+        <div class="sheet">
+          <div class="instruction-banner">
+            <ion-icon :icon="paperPlaneOutline" aria-hidden="true" />
+            <strong>{{ instruction }}</strong>
+          </div>
+          <div v-if="isOutdoor" class="status-chips chips-row">
+            <span v-if="gpsSource === 'simulated'" class="chip sim">SIMULATED GPS</span>
+            <span v-if="outdoor.target?.source === 'test'" class="chip test">TEST target</span>
+            <span v-if="improvingAccuracy" class="chip pill">Improving GPS accuracy...</span>
+            <span v-if="gpsSource === 'real' && gpsStatus === 'tracking' && !gpsPrecise" class="chip pill">
+              Precise location is off
+            </span>
+          </div>
         </div>
-        <div v-if="isOutdoor" class="info-row">
-          <span>Heading to</span>
-          <strong class="small">{{ outdoorTargetName }}</strong>
+        <div class="camera-frame">
+          <span class="corner tl" /><span class="corner tr" /><span class="corner bl" /><span class="corner br" />
+          <NavigationOverlay
+            :arrows="arrows"
+            :destination-name="markerName"
+            :distance-label="distanceLabel"
+            :instruction="''"
+            :heading-offset="pathOffset"
+          />
         </div>
-        <div class="info-row">
-          <span>Distance</span>
+      </template>
+
+      <div class="sheet">
+        <div v-if="cameraMessage" class="camera-banner">
+          <ion-icon :icon="cameraOutline" aria-hidden="true" />
+          <p class="camera-message">{{ cameraMessage }}</p>
+        </div>
+        <ion-button v-if="cameraMessage" expand="block" class="retry" @click="openCamera">
+          <ion-icon slot="start" :icon="cameraOutline" aria-hidden="true" />
+          Try camera again
+        </ion-button>
+
+        <article v-if="showMapWait" class="dest-card">
+          <span class="dest-icon" aria-hidden="true"><ion-icon :icon="iconForDestination" /></span>
+          <div>
+            <p class="dest-kicker">Destination</p>
+            <strong>{{ destinationName }}</strong>
+            <p class="dest-place">
+              <ion-icon :icon="locationOutline" aria-hidden="true" />
+              {{ outdoorTargetName }}
+            </p>
+          </div>
+        </article>
+        <div v-if="showMapWait" class="distance-row">
+          <span><ion-icon :icon="locationOutline" aria-hidden="true" /> Distance</span>
           <strong>{{ distanceLabel }}</strong>
         </div>
-        <p class="instruction">{{ instruction }}</p>
+        <p v-if="!showMapWait" class="live-note">{{ destinationName }} · {{ distanceLabel }}</p>
         <p v-if="isOutdoor && outdoor.raw" class="path-note">GPS Accuracy ±{{ Math.round(outdoor.raw.accuracy) }} m</p>
         <p v-if="showPathNote" class="path-note">Follow the blue path</p>
 
         <div class="debug">
-          <p>Debug</p>
+          <details>
+            <summary>Debug</summary>
           <ul v-if="isOutdoor" class="debug-readout">
             <li>Navigation Mode: {{ modeLabel }}</li>
             <li>GPS Source: {{ gpsSource === 'simulated' ? 'SIMULATED GPS' : 'REAL GPS' }}</li>
@@ -96,34 +133,45 @@
             <li>Forward Heading: {{ forwardHeadingLabel }}</li>
             <li>Remaining Distance: {{ distanceLabel }}</li>
           </ul>
+          </details>
           <div v-if="isOutdoor" class="debug-actions">
-            <ion-button size="small" @click="onToggleSource">
+            <ion-button @click="onToggleSource">
+              <ion-icon slot="start" :icon="paperPlaneOutline" aria-hidden="true" />
               {{ gpsSource === 'simulated' ? 'Use Real GPS' : 'Use Simulated GPS' }}
             </ion-button>
             <ion-button
               v-if="gpsSource === 'real' && !hasSurveyedTarget"
-              size="small"
               :disabled="!outdoor.location"
               @click="onPlaceTestTarget"
             >
               Place Test Target
             </ion-button>
-            <ion-button v-if="gpsSource === 'simulated'" size="small" @click="onSimulateWalk">Sim Walk 3 m</ion-button>
-            <ion-button v-if="gpsSource === 'simulated'" size="small" @click="gps.toggleSimulatedAccuracy">
+            <ion-button v-if="gpsSource === 'simulated'" @click="onSimulateWalk">
+              <ion-icon slot="start" :icon="walkOutline" aria-hidden="true" />
+              Sim Walk 3 m
+            </ion-button>
+            <ion-button v-if="gpsSource === 'simulated'" @click="gps.toggleSimulatedAccuracy">
+              <ion-icon slot="start" :icon="locateOutline" aria-hidden="true" />
               Sim Accuracy {{ simulatedAccuracy }} m
             </ion-button>
-            <ion-button size="small" fill="clear" @click="onReset">Reset</ion-button>
+            <ion-button class="reset" @click="onReset">
+              <ion-icon slot="start" :icon="refreshOutline" aria-hidden="true" />
+              Reset
+            </ion-button>
           </div>
           <div v-else class="debug-actions">
-            <ion-button size="small" :disabled="heading == null" @click="onSetForward">Set Forward</ion-button>
-            <ion-button size="small" @click="onMoveForward">Move Forward</ion-button>
-            <ion-button size="small" @click="onNext">Next Step</ion-button>
-            <ion-button size="small" @click="onTurnRight">Turn Right</ion-button>
-            <ion-button size="small" fill="clear" @click="onReset">Reset</ion-button>
+            <ion-button :disabled="heading == null" @click="onSetForward">Set Forward</ion-button>
+            <ion-button @click="onMoveForward">Move Forward</ion-button>
+            <ion-button @click="onNext">Next Step</ion-button>
+            <ion-button @click="onTurnRight">Turn Right</ion-button>
+            <ion-button class="reset" @click="onReset">
+              <ion-icon slot="start" :icon="refreshOutline" aria-hidden="true" />
+              Reset
+            </ion-button>
           </div>
         </div>
       </div>
-    </ion-footer>
+    </ion-content>
 
     <ion-alert
       :is-open="showEntrance"
@@ -152,9 +200,10 @@ import {
   IonButton,
   IonButtons,
   IonContent,
-  IonFooter,
   IonHeader,
+  IonIcon,
   IonPage,
+  IonSpinner,
   IonToolbar,
   onIonViewDidEnter,
   onIonViewWillLeave,
@@ -162,6 +211,22 @@ import {
 } from '@ionic/vue';
 import { App } from '@capacitor/app';
 import type { PluginListenerHandle } from '@capacitor/core';
+import {
+  bookOutline,
+  businessOutline,
+  cameraOutline,
+  cashOutline,
+  flaskOutline,
+  locateOutline,
+  location,
+  locationOutline,
+  navigateOutline,
+  paperPlaneOutline,
+  peopleOutline,
+  refreshOutline,
+  schoolOutline,
+  walkOutline,
+} from 'ionicons/icons';
 import NavigationOverlay from '@/components/navigation/NavigationOverlay.vue';
 import { LOCATION_RATIONALE, useOutdoorGps } from '@/composables/useOutdoorGps';
 import { FACING_TOLERANCE_DEGREES, TURN_ALIGNMENT_HOLD_MS, type Destination } from '@/models/navigation';
@@ -233,6 +298,23 @@ let alignTimer: number | null = null;
 let wentBackground = false;
 
 const isOutdoor = computed(() => stage.value !== 'indoor');
+const showMapWait = computed(() => isOutdoor.value && !outdoorGuiding.value);
+const waitTitle = computed(() => (locationPrompt.value ? 'Location needed' : 'Getting your location...'));
+const waitSubtitle = computed(() => {
+  if (locationPrompt.value) return locationPrompt.value.text;
+  if (!outdoor.value.location) return 'Please wait while we find your current position.';
+  return instruction.value;
+});
+const iconForDestination = computed(() => {
+  const item = destination.value;
+  const key = `${item?.id ?? ''} ${item?.name ?? ''} ${item?.type ?? ''}`.toLowerCase();
+  if (key.includes('library')) return bookOutline;
+  if (key.includes('cashier') || key.includes('cash') || key.includes('finance')) return cashOutline;
+  if (key.includes('guidance') || key.includes('counsel')) return peopleOutline;
+  if (key.includes('lab')) return flaskOutline;
+  if (key.includes('class') || key.includes('school')) return schoolOutline;
+  return businessOutline;
+});
 const destinationName = computed(() => destination.value?.name ?? navigation.value.destinationName);
 const buildingName = computed(() => destination.value?.building ?? navigation.value.building);
 const outdoorTargetName = computed(() => (
@@ -593,9 +675,34 @@ onUnmounted(endSession);
 
 <style scoped>
 .nav-toolbar {
-  --background: #0b3a5b;
+  --background: #0c2d52;
   --color: #ffffff;
   --border-width: 0;
+  --min-height: 56px;
+}
+
+.brand-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pin {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  background: #1d4ed8;
+  color: #fff;
+  font-size: 15px;
+}
+
+.brand-sub {
+  margin-left: 34px;
+  color: #c5d4e8;
+  font-size: 13px;
+  font-weight: 500;
 }
 
 .brand-lockup {
@@ -607,191 +714,310 @@ onUnmounted(endSession);
 
 .brand-lockup strong {
   color: #ffffff;
-  font-size: 18px;
+  font-size: 20px;
+  font-weight: 800;
   line-height: 1.1;
 }
 
-.brand-lockup span {
-  color: #9fdfff;
-  font-size: 12px;
+.nav-content {
+  --background: #eef5fb;
+}
+
+.sheet {
+  padding: 12px 16px 4px;
+  background: #eef5fb;
+}
+
+.map-card {
+  position: relative;
+  height: 168px;
+  margin-bottom: 16px;
+  border-radius: 24px;
+  background:
+    linear-gradient(#d7e4f2, #d7e4f2) 18% 42% / 46% 8px no-repeat,
+    linear-gradient(#d7e4f2, #d7e4f2) 62% 28% / 8px 48% no-repeat,
+    linear-gradient(#e7eef6, #e7eef6) 30% 70% / 28% 8px no-repeat,
+    radial-gradient(circle at 50% 46%, rgba(37, 99, 235, 0.18), transparent 42%),
+    #f7fbff;
+  box-shadow: inset 0 0 0 1px #e1ebf5;
+}
+
+.map-pin {
+  position: absolute;
+  left: 50%;
+  top: 42%;
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 999px;
+  background: #2563eb;
+  color: #fff;
+  font-size: 22px;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 0 10px rgba(37, 99, 235, 0.18);
+}
+
+.wait-title {
+  margin: 0;
+  color: #12263f;
+  font-size: 22px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.wait-sub,
+.hint,
+.path-note,
+.live-note {
+  margin: 6px 0 0;
+  color: #6b8096;
+  font-size: 14px;
+  text-align: center;
+}
+
+.status-chips {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.chips-row {
+  margin-top: 10px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.chip.pill {
+  background: #fff;
+  color: #1d4ed8;
+  box-shadow: 0 4px 14px rgba(15, 42, 74, 0.06);
+}
+
+.chip.sim {
+  background: #f5c518;
+  color: #3b2f00;
+}
+
+.chip.test {
+  background: #fff;
+  color: #12263f;
+  box-shadow: 0 4px 14px rgba(15, 42, 74, 0.06);
+}
+
+.prompt-actions {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.prompt-actions ion-button {
+  --border-radius: 12px;
+  --background: #1d4ed8;
+  text-transform: none;
+  font-weight: 700;
+}
+
+.prompt-actions ion-button.back {
+  --background: #fff;
+  --color: #1d4ed8;
+  --border-color: #d5e0ec;
+}
+
+.instruction-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: #fff;
+  color: #12263f;
+  box-shadow: 0 8px 20px rgba(15, 42, 74, 0.06);
+}
+
+.instruction-banner ion-icon {
+  color: #1d4ed8;
+  font-size: 22px;
+}
+
+.instruction-banner strong {
+  font-size: 16px;
+}
+
+.camera-frame {
+  position: relative;
+  height: 230px;
+  margin: 0 16px;
+  overflow: hidden;
+  background: transparent;
+}
+
+.camera-frame :deep(.guide) {
+  display: none;
+}
+
+.corner {
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  z-index: 2;
+  border: 3px solid #fff;
+}
+
+.corner.tl { top: 10px; left: 10px; border-right: 0; border-bottom: 0; }
+.corner.tr { top: 10px; right: 10px; border-left: 0; border-bottom: 0; }
+.corner.bl { bottom: 10px; left: 10px; border-right: 0; border-top: 0; }
+.corner.br { bottom: 10px; right: 10px; border-left: 0; border-top: 0; }
+
+.camera-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: #fde8e8;
+  color: #9f1239;
+}
+
+.camera-banner ion-icon {
+  margin-top: 2px;
+  font-size: 20px;
+}
+
+.camera-message {
+  margin: 0;
+  font-size: 14px;
+  text-align: left;
+}
+
+.retry {
+  margin-top: 10px;
+  --background: #1d4ed8;
+  --border-radius: 12px;
+  font-weight: 800;
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
 
-.nav-content {
-  --background: #071820;
-}
-
-.stage {
-  position: relative;
-  height: 100%;
-}
-
-.status-chips {
-  position: absolute;
-  top: 64px;
-  left: 12px;
-  right: 12px;
+.dest-card {
   display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 6px;
-  pointer-events: none;
-}
-
-.chip {
-  padding: 4px 10px;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.03em;
-}
-
-.chip.sim {
-  background: #f5b700;
-  color: #1d1600;
-}
-
-.chip.test {
-  background: #ff7a45;
-  color: #2b0d00;
-}
-
-.chip.warn {
-  background: rgba(7, 24, 32, 0.85);
-  color: #ffd166;
-  border: 1px solid #ffd166;
-}
-
-.location-card {
-  position: absolute;
-  left: 16px;
-  right: 16px;
-  bottom: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 12px;
-  border-radius: 14px;
-  background: rgba(7, 24, 32, 0.9);
-  color: #f4fbff;
-}
-
-.location-card .hint {
-  margin: 0;
-  color: #9fdfff;
-  font-size: 13px;
-  text-align: center;
-}
-
-.location-card ion-button {
-  --background: #1493c7;
-  margin: 0;
-}
-
-.location-card ion-button.back {
-  --background: transparent;
-  --color: #9fdfff;
-  --border-color: #9fdfff;
-}
-
-.camera-message {
-  position: absolute;
-  left: 16px;
-  right: 16px;
-  bottom: 72px;
-  margin: 0;
-  padding: 10px 12px;
-  border-radius: 12px;
-  background: rgba(120, 24, 24, 0.9);
-  color: #ffd0d0;
-  text-align: center;
-}
-
-.retry {
-  position: absolute;
-  left: 50%;
-  bottom: 16px;
-  transform: translateX(-50%);
-  --background: #1493c7;
-}
-
-.nav-footer {
-  background: #0b3a5b;
-}
-
-.info-card {
-  max-height: 46vh;
-  overflow-y: auto;
-  padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
-  color: #f4fbff;
-}
-
-.info-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
   gap: 12px;
-  margin-bottom: 4px;
+  margin-top: 14px;
+  padding: 14px;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 8px 20px rgba(15, 42, 74, 0.06);
 }
 
-.info-row span,
-.path-note,
-.debug p {
-  color: #9fdfff;
+.dest-icon {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 999px;
+  background: #e8f1fb;
+  color: #1d4ed8;
+  font-size: 22px;
+}
+
+.dest-kicker,
+.dest-place {
+  margin: 0;
+  color: #6b8096;
   font-size: 13px;
 }
 
-.info-row strong {
-  font-size: 20px;
+.dest-card strong {
+  display: block;
+  color: #12263f;
+  font-size: 18px;
 }
 
-.info-row strong.small {
-  font-size: 15px;
-  text-align: right;
+.dest-place {
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
-.instruction,
-.path-note,
-.debug p,
-.debug-readout {
-  margin: 4px 0 0;
+.dest-place ion-icon {
+  color: #3b82f6;
 }
 
-.instruction {
-  font-size: 16px;
+.distance-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 10px;
+  padding: 14px;
+  border-radius: 18px;
+  background: #fff;
+  color: #12263f;
+}
+
+.distance-row span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #5d738a;
+}
+
+.distance-row strong {
+  color: #1d4ed8;
+  font-size: 18px;
 }
 
 .debug {
-  margin-top: 10px;
-  padding-top: 8px;
-  border-top: 1px solid rgba(159, 223, 255, 0.25);
+  margin: 14px 0 24px;
+}
+
+.debug summary {
+  color: #6b8096;
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .debug-readout {
-  margin: 4px 0 0;
+  margin: 8px 0 0;
   padding: 0;
   list-style: none;
-  color: #d7f3ff;
+  color: #35586d;
   font-size: 12px;
-  line-height: 1.35;
-}
-
-.debug-readout li {
-  margin: 0;
+  line-height: 1.4;
 }
 
 .debug-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 8px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 12px;
 }
 
 .debug-actions ion-button {
-  --background: #1493c7;
-  --border-radius: 999px;
+  --background: #fff;
+  --color: #1d4ed8;
+  --border-radius: 14px;
+  --box-shadow: 0 6px 16px rgba(15, 42, 74, 0.06);
   margin: 0;
+  height: 52px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.debug-actions ion-button.reset {
+  grid-column: 1 / -1;
 }
 </style>
 

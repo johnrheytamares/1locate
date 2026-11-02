@@ -1,6 +1,6 @@
 <template>
   <div class="overlay" role="dialog" aria-modal="true" :aria-label="title" @keydown.esc="$emit('cancel')">
-    <div class="dialog small">
+    <div class="dialog small" :class="{ 'danger-tone': danger }">
       <h2>{{ title }}</h2>
       <slot />
       <div class="form-actions">

@@ -1,42 +1,61 @@
 <template>
   <div>
-    <header class="page-header">
-      <div>
-        <h1>Floors</h1>
-        <p>Floors have no publish switch of their own. They show in the app while their building is published.</p>
+    <header class="page-header catalog-head">
+      <div class="title-row">
+        <span class="page-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path fill="currentColor" d="M4 5h16v3H4V5zm0 5.5h16v3H4v-3zM4 16h16v3H4v-3z"/></svg>
+        </span>
+        <div>
+          <h1>Floors Management</h1>
+          <p>Manage floors for each building. Floors show in the app while their building is published.</p>
+        </div>
       </div>
-      <button type="button" data-test="new-floor" :disabled="buildings.length === 0" @click="openCreate">New floor</button>
     </header>
+
+    <div class="mini-stats">
+      <article class="stat card tone-blue">
+        <span class="stat-icon" style="color:#1d4ed8" aria-hidden="true"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M4 5h16v3H4V5zm0 5.5h16v3H4v-3zM4 16h16v3H4v-3z"/></svg></span>
+        <div><strong>{{ floors.length }}</strong><span>Total Floors</span></div>
+      </article>
+    </div>
 
     <p v-if="error" class="notice error" role="alert" data-test="page-error">{{ error }}</p>
     <p v-if="notice" class="notice ok">{{ notice }}</p>
     <p v-if="!loading && buildings.length === 0" class="notice">Add a building first, then its floors.</p>
 
-    <div class="toolbar">
-      <input v-model="search" type="search" placeholder="Search floor name" aria-label="Search floors" />
+    <div class="toolbar list-toolbar">
+      <label class="search-field">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M10 4a6 6 0 1 0 3.7 10.7l4.3 4.3 1.4-1.4-4.3-4.3A6 6 0 0 0 10 4zm0 2a4 4 0 1 1 0 8 4 4 0 0 1 0-8z" /></svg>
+        <input v-model="search" type="search" placeholder="Search floor name" aria-label="Search floors" />
+      </label>
       <select v-model="buildingFilter" aria-label="Filter by building" data-test="building-filter">
         <option value="">All buildings</option>
         <option v-for="building in buildings" :key="building.id" :value="building.id">{{ building.name }}</option>
       </select>
+      <button type="button" data-test="new-floor" :disabled="buildings.length === 0" @click="openCreate">+ Add Floor</button>
     </div>
 
     <p v-if="loading" class="muted">Loading floors...</p>
     <div v-else-if="filtered.length === 0" class="table-wrap">
       <p class="empty" data-test="empty">{{ floors.length === 0 ? 'No floors yet.' : 'No floors match the filters.' }}</p>
     </div>
-    <div v-else class="table-wrap">
+    <div v-else class="table-wrap data-table">
       <table>
         <thead>
-          <tr><th>Building</th><th>Level</th><th>Name</th><th></th></tr>
+          <tr><th>Building</th><th>Level</th><th>Name</th><th class="actions-head">Actions</th></tr>
         </thead>
         <tbody>
           <tr v-for="floor in filtered" :key="floor.id" data-test="floor-row">
-            <td>{{ buildingName(floor.building_id) }}</td>
-            <td>{{ floor.level }}</td>
-            <td>{{ floor.name }}</td>
-            <td class="actions">
-              <button class="ghost small" type="button" @click="openEdit(floor)">Edit</button>
-              <button class="ghost small error" type="button" :disabled="busy" @click="askDelete(floor)">Delete</button>
+            <td data-label="Building">{{ buildingName(floor.building_id) }}</td>
+            <td data-label="Level">{{ floor.level }}</td>
+            <td class="name-cell" data-label="Name">{{ floor.name }}</td>
+            <td class="actions" data-label="Actions">
+              <button class="ghost small icon-btn" type="button" aria-label="Edit" title="Edit" @click="openEdit(floor)">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3 17.2V21h3.8l11-11-3.8-3.8-11 11zM20.7 7.1a1 1 0 0 0 0-1.4l-2.4-2.4a1 1 0 0 0-1.4 0l-1.8 1.8 3.8 3.8 1.8-1.8z"/></svg>
+              </button>
+              <button class="ghost small error icon-btn" type="button" :disabled="busy" aria-label="Delete" title="Delete" @click="askDelete(floor)">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M9 3h6l1 2h4v2H4V5h4l1-2zm1 6h2v9h-2V9zm4 0h2v9h-2V9zM7 9h2v9H7V9z"/></svg>
+              </button>
             </td>
           </tr>
         </tbody>
@@ -45,7 +64,15 @@
 
     <div v-if="editing" class="overlay" role="dialog" aria-modal="true" aria-label="Floor form">
       <form class="dialog small" novalidate data-test="floor-form" @submit.prevent="onSave">
-        <h2>{{ editing.id ? 'Edit floor' : 'New floor' }}</h2>
+        <div class="dialog-title">
+          <div>
+            <h2>{{ editing.id ? 'Edit Floor' : 'Add Floor' }}</h2>
+            <p class="muted">{{ editing.id ? 'Update this floor.' : 'Add a floor to a building.' }}</p>
+          </div>
+          <button class="ghost icon-btn" type="button" aria-label="Close" @click="editing = null">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M6.4 5 12 10.6 17.6 5 19 6.4 13.4 12 19 17.6 17.6 19 12 13.4 6.4 19 5 17.6 10.6 12 5 6.4z"/></svg>
+          </button>
+        </div>
         <p v-if="formError" class="notice error" role="alert">{{ formError }}</p>
         <div class="form-grid">
           <FormField v-slot="{ id }" name="buildingId" label="Building" :error="errors.buildingId" required full>
@@ -62,8 +89,7 @@
           </FormField>
         </div>
         <div class="form-actions">
-          <button class="secondary" type="button" :disabled="saving" @click="editing = null">Cancel</button>
-          <button type="submit" :disabled="saving">{{ saving ? 'Saving...' : 'Save' }}</button>
+          <button type="submit" :disabled="saving">{{ saving ? 'Saving...' : 'Save Floor' }}</button>
         </div>
       </form>
     </div>
@@ -91,7 +117,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, getCurrentInstance, onMounted, ref } from 'vue';
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
 import FormField from '@/components/FormField.vue';
 import { describeError } from '@/lib/errors';
@@ -227,5 +253,10 @@ async function onDelete() {
   }
 }
 
-onMounted(load);
+const page = getCurrentInstance();
+onMounted(async () => {
+  await load();
+  const create = page?.appContext.config.globalProperties.$route?.query?.create;
+  if (create === '1' && buildings.value.length > 0) openCreate();
+});
 </script>

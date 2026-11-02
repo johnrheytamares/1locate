@@ -2,7 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { NoRowsChangedError } from '@/lib/errors';
 import { requireClient, supabase } from '@/lib/supabase';
 import type { BuildingPayload, FloorPayload, RoomPayload } from '@/lib/validation';
-import type { AppRole, Building, DestinationRecord, Floor, Room, UserRoleRecord } from '@/types';
+import type { AppRole, Building, DestinationRecord, Floor, MapLabel, Room, UserRoleRecord } from '@/types';
 
 type Client = SupabaseClient | null;
 
@@ -165,6 +165,12 @@ export async function getOwnRole(userId: string, client: Client = supabase): Pro
   if (error) throw error;
   const role = (data as { role?: unknown } | null)?.role;
   return role === 'admin' || role === 'editor' ? role : null;
+}
+
+const MAP_LABEL_COLUMNS = 'id, name, category, building_id, latitude, longitude, is_active';
+
+export function listMapLabels(client: Client = supabase): Promise<MapLabel[]> {
+  return rows(requireClient(client).from('map_labels').select(MAP_LABEL_COLUMNS).order('sort_order').order('name'));
 }
 
 export function listRoles(client: Client = supabase): Promise<UserRoleRecord[]> {

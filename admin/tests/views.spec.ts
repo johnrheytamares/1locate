@@ -59,7 +59,7 @@ describe('Role Management screen', () => {
     await flushPromises();
     const rows = wrapper.findAll('[data-test="role-row"]');
     expect(rows).toHaveLength(2);
-    expect(rows[0].find('[data-test="self-badge"]').exists()).toBe(true);
+    expect(rows[0].text()).toContain('cannot be changed');
     expect(rows[0].find('[data-test="role-select"]').exists()).toBe(false);
     expect(rows[0].find('[data-test="role-remove"]').exists()).toBe(false);
     expect(rows[1].find('[data-test="role-select"]').exists()).toBe(true);

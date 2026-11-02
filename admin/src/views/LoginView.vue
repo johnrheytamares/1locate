@@ -10,7 +10,38 @@
       </div>
       <div class="field" style="margin-top: 12px">
         <label for="password">Password</label>
-        <input id="password" v-model="password" type="password" autocomplete="current-password" required data-test="password" />
+        <div class="password-wrap">
+          <input
+            id="password"
+            v-model="password"
+            :type="showPassword ? 'text' : 'password'"
+            autocomplete="current-password"
+            required
+            data-test="password"
+          />
+          <button
+            type="button"
+            class="password-toggle"
+            :aria-label="showPassword ? 'Hide password' : 'Show password'"
+            :aria-pressed="showPassword"
+            data-test="toggle-password"
+            @click="showPassword = !showPassword"
+          >
+            <svg v-if="showPassword" viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                fill="currentColor"
+                d="M12 6.5c-5 0-8.3 4.2-9.2 5.5.9 1.3 4.2 5.5 9.2 5.5s8.3-4.2 9.2-5.5c-.9-1.3-4.2-5.5-9.2-5.5zm0 9a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"
+              />
+              <path stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M4 5l16 14" />
+            </svg>
+            <svg v-else viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                fill="currentColor"
+                d="M12 6.5c-5 0-8.3 4.2-9.2 5.5.9 1.3 4.2 5.5 9.2 5.5s8.3-4.2 9.2-5.5c-.9-1.3-4.2-5.5-9.2-5.5zm0 9a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7zm0-1.5a2 2 0 1 0 0-4 2 2 0 0 0 0 4z"
+              />
+            </svg>
+          </button>
+        </div>
       </div>
       <div class="form-actions">
         <button type="submit" :disabled="busy" data-test="sign-in">{{ busy ? 'Signing in...' : 'Sign in' }}</button>
@@ -34,6 +65,7 @@ const route = useRoute();
 
 const email = ref('');
 const password = ref('');
+const showPassword = ref(false);
 const error = ref('');
 const busy = ref(false);
 
@@ -52,3 +84,35 @@ async function onSubmit() {
   }
 }
 </script>
+
+<style scoped>
+.password-wrap {
+  position: relative;
+}
+.password-wrap input {
+  width: 100%;
+  padding-right: 40px;
+}
+.password-toggle {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  transform: translateY(-50%);
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.password-toggle:hover {
+  color: inherit;
+}
+.password-toggle svg {
+  width: 20px;
+  height: 20px;
+}
+</style>

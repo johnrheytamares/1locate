@@ -27,25 +27,41 @@ export function createSessionStore(client: SupabaseClient | null, now: () => num
   let ready: Promise<void> | null = null;
   let roleRequest = 0;
   let roleCheckedAt = 0;
+  let roleInFlight: Promise<void> | null = null;
+  let roleInFlightUser: string | null = null;
 
   function clear() {
+    roleRequest += 1;
+    roleInFlight = null;
+    roleInFlightUser = null;
     Object.assign(state, initialState('signed-out'));
     clearListeners.forEach((listener) => listener());
   }
 
-  async function loadRole(userId: string) {
+  function loadRole(userId: string): Promise<void> {
+    if (roleInFlight && roleInFlightUser === userId) return roleInFlight;
     const request = ++roleRequest;
+    roleInFlightUser = userId;
     state.roleError = null;
     roleCheckedAt = now();
-    try {
-      const role = await getOwnRole(userId, client);
-      if (request === roleRequest && state.userId === userId) state.role = role;
-    } catch (error) {
-      if (request === roleRequest && state.userId === userId) {
-        state.role = null;
-        state.roleError = describeError(error);
+    const pending = (async () => {
+      try {
+        const role = await getOwnRole(userId, client);
+        if (request === roleRequest && state.userId === userId) state.role = role;
+      } catch (error) {
+        if (request === roleRequest && state.userId === userId) {
+          state.role = null;
+          state.roleError = describeError(error);
+        }
+      } finally {
+        if (roleInFlight === pending) {
+          roleInFlight = null;
+          roleInFlightUser = null;
+        }
       }
-    }
+    })();
+    roleInFlight = pending;
+    return pending;
   }
 
   async function applySession(session: Session | null) {
@@ -57,7 +73,8 @@ export function createSessionStore(client: SupabaseClient | null, now: () => num
     state.userId = session.user.id;
     state.email = session.user.email ?? null;
     if (!sameUser) {
-      state.role = null;
+      const alreadyLoading = roleInFlight !== null && roleInFlightUser === session.user.id;
+      if (!alreadyLoading) state.role = null;
       await loadRole(session.user.id);
     }
     state.status = 'signed-in';
