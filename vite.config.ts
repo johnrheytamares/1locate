@@ -2,7 +2,7 @@
 
 import legacy from '@vitejs/plugin-legacy'
 import vue from '@vitejs/plugin-vue'
-import path from 'path'
+import { fileURLToPath, URL } from 'node:url'
 import { defineConfig } from 'vite'
 import { configDefaults } from 'vitest/config'
 
@@ -15,7 +15,7 @@ export default defineConfig({
   ],
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, './src'),
+      '@': fileURLToPath(new URL('./src', import.meta.url)),
     },
   },
   // admin/ is a separate app with its own Vite config and dependencies.
