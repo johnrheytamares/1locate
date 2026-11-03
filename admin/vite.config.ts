@@ -9,6 +9,8 @@ export default defineConfig({
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
     },
+    // ../shared has no node_modules of its own; CI installs only admin/ dependencies.
+    dedupe: ['vue'],
   },
   server: {
     port: 5174,
