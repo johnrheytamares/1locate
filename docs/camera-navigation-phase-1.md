@@ -44,7 +44,7 @@ GPS or campus map
 
 `TEST_ROUTE` is five steps of 2 meters: straight, straight, straight, right, straight. The total is 10 meters.
 
-The overlay draws arrows for the current stretch only. A straight run shows those straight arrows. The turn arrow appears when that turn is the next step, together with "Turn right ahead" or "Turn left ahead". Arrows beyond the turn stay hidden. The turn advances after the phone holds the new heading inside the 25° tolerance for about 750 ms. Move Forward cannot skip a turn.
+The overlay draws arrows for the current stretch only. A straight run shows those straight arrows. The turn arrow appears when that turn is the next step, together with "Turn right ahead" or "Turn left ahead". Arrows beyond the turn stay hidden. The turn is accepted after the phone holds the new heading inside the 25° tolerance for about 750 ms. Accepting it adds no distance; the turn step is then walked on the new heading. Move Forward cannot skip a turn.
 
 After Set Forward, the arrow column slides sideways by the heading offset. A small lean shows which way the path sits relative to the phone. The instruction banner stays centered. The arrows are still a screen overlay. They do not lock to the floor.
 
@@ -58,7 +58,7 @@ Debug buttons change that state:
 
 Before Set Forward, the instruction is "Point your phone toward the path and tap Set Forward." Left and right facing instructions stay hidden until that heading is saved.
 
-At 0 meters the page shows "You have reached your destination." and a Done button.
+At 0 estimated meters the page shows "Estimated route complete" with a reminder to look for the room sign, and a Done button.
 
 ## Orientation
 
@@ -111,7 +111,7 @@ Set Forward still calibrates the first direction. Straight steps use that headin
 3. Open **Registrar Office** and tap **Navigate**. Allow the camera.
 4. Point along the path and tap **Set Forward**.
 5. Tap **Move Forward** until Route Mode changes from OUTDOOR to INDOOR. The camera should stay on.
-6. Continue until the distance is 0. The alert should say you have reached Registrar Office.
+6. Continue until the distance is 0. The alert should say "Estimated route complete" and ask you to look for the Registrar Office sign.
 7. Tap **Done**. The destination list should return.
 8. Choose another destination and confirm its distance and turn direction differ.
 

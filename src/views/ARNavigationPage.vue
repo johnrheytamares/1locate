@@ -26,7 +26,8 @@
       </ion-toolbar>
     </ion-header>
 
-    <ion-content class="nav-content">
+    <ion-content class="nav-content" :scroll-y="showMapWait">
+      <main :class="{ 'navigation-layout': !showMapWait }">
       <div v-if="showMapWait" class="sheet">
         <div class="map-card" aria-hidden="true">
           <span class="map-pin"><ion-icon :icon="location" /></span>
@@ -59,7 +60,7 @@
       </div>
 
       <template v-else>
-        <div class="sheet">
+        <div v-if="isOutdoor" class="sheet">
           <div class="instruction-banner">
             <ion-icon :icon="paperPlaneOutline" aria-hidden="true" />
             <strong>{{ instruction }}</strong>
@@ -87,7 +88,7 @@
 
       <div class="sheet" :class="{ 'guidance-sheet': !showMapWait }">
         <div v-if="!showMapWait" class="journey-card">
-          <div class="journey-identity"><span class="journey-pin"><ion-icon :icon="location" aria-hidden="true" /></span><div><span class="dest-kicker">{{ isOutdoor ? 'Building entrance' : 'Destination' }}</span><h2>{{ markerName }}</h2><p data-test="journey-distance">Distance: <strong>{{ distanceLabel }}</strong></p></div></div>
+          <div class="journey-identity"><span class="journey-pin"><ion-icon :icon="location" aria-hidden="true" /></span><div><span class="dest-kicker">{{ isOutdoor ? 'Building entrance' : 'Destination' }}</span><h2>{{ markerName }}</h2><p data-test="journey-distance">{{ isOutdoor ? 'Distance' : 'Est. remaining' }}: <strong>{{ distanceLabel }}</strong></p></div></div>
           <div class="journey-instruction"><ion-icon :icon="paperPlaneOutline" aria-hidden="true" /><strong>{{ instruction }}</strong></div>
         </div>
         <div v-if="cameraMessage" class="camera-banner">
@@ -117,34 +118,10 @@
 
         <section v-if="showIndoorHelp" class="indoor-help">
           <template v-if="!navigation.paused">
-            <div class="indoor-controls">
-              <ion-button
-                expand="block"
-                :fill="navigation.forwardHeading == null ? 'solid' : 'outline'"
-                :disabled="heading == null"
-                data-test="set-forward"
-                @click="onSetForward"
-              >
-                Set Forward
-              </ion-button>
-              <ion-button
-                expand="block"
-                :disabled="navigation.forwardHeading == null"
-                data-test="move-forward"
-                @click="onMoveForward"
-              >
-                Move Forward
-              </ion-button>
+            <div v-if="walkingUnavailable" class="walking-fallback" role="status">
+              <p>{{ walkingMessage }}</p>
+              <ion-button fill="outline" @click="walking.start">Retry motion access</ion-button>
             </div>
-            <p class="option-hint">
-              {{ navigation.forwardHeading == null
-                ? 'Stand at the entrance, point your phone along the path, then tap Set Forward.'
-                : 'Tap Move Forward each time you walk about 1 meter along the path.' }}
-            </p>
-            <p class="scope-note" data-test="indoor-scope">
-              Fixed route from {{ entranceName }}. 1Locate cannot see where you are inside the building,
-              so it will not notice if you leave the route.
-            </p>
             <ion-button expand="block" fill="outline" class="lost" data-test="lost-way" @click="onLostWay">
               <ion-icon slot="start" :icon="helpCircleOutline" aria-hidden="true" />
               I lost my way
@@ -168,8 +145,8 @@
           <div v-else class="recovery" role="region" aria-label="Restart from entrance" data-test="restart-confirm">
             <h2>Go back to {{ entranceName }}</h2>
             <p>
-              Restart only when you are standing at the entrance. Route progress and Set Forward will be
-              cleared, and you will need to tap Set Forward again.
+              Restart only when you are standing at the entrance. Route progress will reset.
+              Face the corridor; the forward direction is set automatically.
             </p>
             <ion-button expand="block" data-test="confirm-entrance" @click="onRestartConfirmed">
               I'm at the entrance
@@ -180,7 +157,6 @@
           </div>
         </section>
         <p v-if="isOutdoor && outdoor.raw" class="path-note">GPS Accuracy ±{{ Math.round(outdoor.raw.accuracy) }} m</p>
-        <p v-if="showPathNote" class="path-note">Follow the blue path</p>
 
         <div v-if="devTools" class="debug" data-test="debug">
           <details>
@@ -219,6 +195,17 @@
             <li>Remaining Distance: {{ distanceLabel }}</li>
             <li>Guidance: {{ navigation.paused ? 'paused' : 'active' }}</li>
           </ul>
+          <ul v-if="!isOutdoor && walkingDiagnostics" class="debug-readout" data-test="walking-diagnostics">
+            <li>Motion: {{ walkingEnabled ? 'listening' : 'off' }} · {{ walkingDiagnostics.source }} · {{ walkingDiagnostics.sampleRateHz ?? '--' }} Hz</li>
+            <li>Acceleration: {{ accelerationLabel }}</li>
+            <li>Rotation α/β/γ: {{ rotationLabel }}</li>
+            <li>Steps: {{ walkingDiagnostics.candidateSteps }} candidate · {{ walkingDiagnostics.acceptedSteps }} accepted</li>
+            <li>Walking Blocked: {{ walkBlock ?? 'no' }}</li>
+            <li>Last Step Reason: {{ walkingDiagnostics.lastReason }}</li>
+            <li>Step Length: {{ walkingStepLength.toFixed(2) }} m ({{ walkingDiagnostics.stepLengthSource }})</li>
+            <li>Walked: {{ navigation.walkedMeters.toFixed(2) }} m of {{ routeMeters }} m</li>
+            <li>Arrival Trigger: estimated walked ≥ route length ({{ arrived ? 'met' : 'not met' }})</li>
+          </ul>
           </details>
           <div v-if="isOutdoor" class="debug-actions">
             <ion-button @click="onToggleSource">
@@ -246,6 +233,7 @@
             </ion-button>
           </div>
           <div v-else class="debug-actions">
+            <ion-button data-test="move-forward" @click="onMoveForward">Move Forward</ion-button>
             <ion-button @click="onNext">Next Step</ion-button>
             <ion-button @click="onTurnRight">Turn Right</ion-button>
             <ion-button class="reset" @click="onReset">
@@ -255,9 +243,11 @@
           </div>
         </div>
       </div>
+      </main>
     </ion-content>
 
     <ion-alert
+      css-class="navigation-alert"
       :is-open="showEntrance"
       :header="`Are you at ${entranceName}?`"
       :message="entranceMessage"
@@ -270,8 +260,10 @@
     />
 
     <ion-alert
+      css-class="navigation-alert arrival-alert"
+      :backdrop-dismiss="false"
       :is-open="showArrival"
-      header="You have reached your destination."
+      header="Estimated route complete"
       :message="arrivalMessage"
       :buttons="[{ text: 'Done', role: 'confirm' }]"
       @didDismiss="onArrivalDismiss"
@@ -319,6 +311,7 @@ import {
 } from 'ionicons/icons';
 import NavigationOverlay from '@/components/navigation/NavigationOverlay.vue';
 import { LOCATION_RATIONALE, useOutdoorGps } from '@/composables/useOutdoorGps';
+import { useIndoorWalking } from '@/composables/useIndoorWalking';
 import { useVoice } from '@/composables/useVoice';
 import { SHOW_DEV_TOOLS } from '@/config/dev-tools';
 import { FACING_TOLERANCE_DEGREES, TURN_ALIGNMENT_HOLD_MS, type Destination } from '@/models/navigation';
@@ -326,6 +319,7 @@ import { startRearPreview, stopRearPreview } from '@/services/camera.service';
 import { LOCATION_MESSAGES } from '@/services/location.service';
 import {
   advanceInstruction,
+  arrivalInstruction,
   clearSelectedDestination,
   completeCurrentTurn,
   createTestNavigation,
@@ -340,6 +334,7 @@ import {
   loadSelectedRoute,
   moveForward,
   navigationInstruction,
+  needsTurn,
   nextRouteStep,
   pauseNavigation,
   remainingMeters,
@@ -348,6 +343,8 @@ import {
   restartFromEntrance,
   resumeNavigation,
   setForwardHeading,
+  totalMeters,
+  walkBlockReason,
   type GuideArrow,
 } from '@/services/navigation.service';
 import {
@@ -372,6 +369,20 @@ const navigation = ref(createTestNavigation());
 const stage = ref<NavigationStage>('outdoor');
 const heading = ref<number | null>(null);
 const cameraMessage = ref('');
+const walking = useIndoorWalking(
+  () => walkBlock.value,
+  (meters) => { navigation.value = moveForward(navigation.value, meters); },
+  { diagnostics: SHOW_DEV_TOOLS },
+);
+const {
+  enabled: walkingEnabled,
+  message: walkingMessage,
+  stepLength: walkingStepLength,
+  diagnostics: walkingDiagnostics,
+} = walking;
+const walkingUnavailable = computed(() => !walkingEnabled.value && /unavailable|denied|No motion|stopped|Could not/.test(walkingMessage.value));
+const appActive = ref(true);
+
 const showArrival = ref(false);
 const showEntrance = ref(false);
 const pageOpen = ref(false);
@@ -397,7 +408,7 @@ let cameraSession = 0;
 let stopHeading = () => {};
 let appHandle: PluginListenerHandle | null = null;
 let alignTimer: number | null = null;
-let wentBackground = false;
+const wentBackground = ref(false);
 
 const isOutdoor = computed(() => stage.value !== 'indoor');
 const showMapWait = computed(() => isOutdoor.value && !outdoorGuiding.value);
@@ -441,15 +452,24 @@ const entranceUnmapped = computed(() => (
 ));
 const entranceMessage = computed(() => (
   entranceByGps.value
-    ? `GPS shows you near the entrance, but it cannot tell where you are inside. Start the route to ${destinationName.value} only when you are standing at ${entranceName.value}.`
-    : `1Locate cannot check this with GPS. Start the route to ${destinationName.value} only when you are standing at ${entranceName.value}.`
+    ? `GPS shows you near the entrance, but it cannot tell where you are inside. Start the route to ${destinationName.value} only when you are standing at ${entranceName.value}, with your phone facing the first corridor.`
+    : `1Locate cannot check this with GPS. Start the route to ${destinationName.value} only when you are standing at ${entranceName.value}, with your phone facing the first corridor.`
 ));
 
 const arrived = computed(() => hasArrived(navigation.value));
 const stepIndex = computed(() => currentStepIndex(navigation.value));
 const currentDirection = computed(() => currentStep(navigation.value)?.direction ?? 'straight');
 const modeLabel = computed(() => (isOutdoor.value ? 'OUTDOOR (GPS)' : 'INDOOR (fixed route)'));
-const arrivalMessage = computed(() => `You have reached ${navigation.value.destinationName}.`);
+const arrivalMessage = computed(() => (
+  `${arrivalInstruction(navigation.value.destinationName)} Distance is estimated from your steps, so 1Locate cannot confirm you are at the room.`
+));
+/** Why detected steps cannot add distance right now; null while walking counts. */
+const walkBlock = computed(() => {
+  if (!pageOpen.value) return 'page closed';
+  if (stage.value !== 'indoor') return 'not on the indoor route';
+  if (wentBackground.value) return 'app was in background';
+  return walkBlockReason(navigation.value, heading.value);
+});
 const showIndoorHelp = computed(() => stage.value === 'indoor' && !arrived.value);
 
 const locationPrompt = computed(() => {
@@ -484,13 +504,16 @@ const required = computed(() => (isOutdoor.value ? outdoor.value.bearing : requi
 const offset = computed(() => headingOffset(heading.value, required.value));
 
 const distanceLabel = computed(() => {
-  if (!isOutdoor.value) return `${remainingMeters(navigation.value)} m`;
+  if (!isOutdoor.value) return `${Number(remainingMeters(navigation.value).toFixed(1))} m`;
   const distance = outdoor.value.distance;
   return distance == null ? '-- m' : `${Math.round(distance)} m`;
 });
 
 const instruction = computed(() => {
-  if (!isOutdoor.value) return navigationInstruction(navigation.value, heading.value);
+  if (!isOutdoor.value) {
+    if (!navigation.value.paused && navigation.value.forwardHeading == null) return 'Face the corridor to begin. Waiting for phone direction.';
+    return navigationInstruction(navigation.value, heading.value);
+  }
   if (locationPrompt.value) return locationPrompt.value.text;
   if (gpsSource.value === 'real' && !outdoor.value.location && gpsMessage.value) return gpsMessage.value;
   if (entranceUnmapped.value) {
@@ -508,12 +531,6 @@ const pathOffset = computed(() => {
   if (isOutdoor.value) return outdoorGuiding.value ? offset.value : null;
   return navigation.value.forwardHeading == null || navigation.value.paused ? null : offset.value;
 });
-
-const showPathNote = computed(() => (
-  isOutdoor.value
-    ? outdoorGuiding.value && !locationPrompt.value
-    : navigation.value.forwardHeading != null && !navigation.value.paused
-));
 
 const accuracyLabel = computed(() => {
   const raw = outdoor.value.raw;
@@ -553,6 +570,18 @@ const requiredHeadingLabel = computed(() => (
 const offsetLabel = computed(() => (
   heading.value == null ? 'unavailable' : formatSigned(offset.value)
 ));
+const routeMeters = computed(() => Number(totalMeters(navigation.value).toFixed(1)));
+const accelerationLabel = computed(() => {
+  const a = walkingDiagnostics?.acceleration;
+  return a
+    ? `${a.x.toFixed(2)}, ${a.y.toFixed(2)}, ${a.z.toFixed(2)} (|a| ${a.magnitude.toFixed(2)} m/s²)`
+    : 'no samples';
+});
+const rotationLabel = computed(() => {
+  const r = walkingDiagnostics?.rotation;
+  const show = (value: number | null) => (value == null ? '--' : value.toFixed(0));
+  return r ? `${show(r.alpha)}, ${show(r.beta)}, ${show(r.gamma)} °/s` : 'unavailable';
+});
 
 watch(() => outdoor.value.arrived, (isArrived) => {
   if (!isArrived || stage.value !== 'outdoor') return;
@@ -601,15 +630,14 @@ function clearAlignTimer() {
 }
 
 function syncTurnAlignment() {
-  const step = currentStep(navigation.value);
   const onTurn = stage.value === 'indoor'
     && !navigation.value.paused
-    && step != null
-    && step.direction !== 'straight'
-    && !hasArrived(navigation.value);
+    && needsTurn(navigation.value);
   if (!onTurn) {
     clearAlignTimer();
-    turnAlignment.value = 'not a turn';
+    turnAlignment.value = currentDirection.value === 'straight' || arrived.value
+      ? 'not a turn'
+      : 'turn made; walk this step';
     return;
   }
   if (heading.value == null || offset.value == null) {
@@ -628,11 +656,9 @@ function syncTurnAlignment() {
   const startedForward = navigation.value.forwardHeading;
   alignTimer = window.setTimeout(() => {
     alignTimer = null;
-    const still = currentStep(navigation.value);
     const stillAligned = stage.value === 'indoor'
       && !navigation.value.paused
-      && still != null
-      && still.direction !== 'straight'
+      && needsTurn(navigation.value)
       && navigation.value.walkedMeters === startedWalked
       && navigation.value.forwardHeading === startedForward
       && offset.value != null
@@ -651,6 +677,7 @@ function setCameraChrome(active: boolean) {
 }
 
 async function openCamera() {
+  if (!pageOpen.value || showMapWait.value || !appActive.value) return;
   const session = cameraSession;
   cameraMessage.value = '';
   try {
@@ -717,6 +744,8 @@ function enterIndoor() {
   turnAlignment.value = 'not a turn';
   confirmingRestart.value = false;
   stage.value = 'indoor';
+  initializeForward();
+  void walking.start();
 }
 
 /** The indoor route starts only after the user confirms they are at the entrance. */
@@ -734,6 +763,7 @@ function onEntranceDismiss(event: CustomEvent<{ role?: string }>) {
 }
 
 function onLostWay() {
+  walking.stop();
   clearAlignTimer();
   turnAlignment.value = 'not a turn';
   confirmingRestart.value = false;
@@ -743,6 +773,8 @@ function onLostWay() {
 function onResume() {
   confirmingRestart.value = false;
   navigation.value = resumeNavigation(navigation.value);
+  initializeForward();
+  void walking.start();
 }
 
 function onRestartConfirmed() {
@@ -751,6 +783,8 @@ function onRestartConfirmed() {
   showArrival.value = false;
   turnAlignment.value = 'not a turn';
   navigation.value = restartFromEntrance(navigation.value, true);
+  initializeForward();
+  void walking.start();
 }
 
 function chooseAnotherDestination() {
@@ -778,12 +812,27 @@ function onTurnRight() {
   navigation.value = jumpToRightTurn(navigation.value);
 }
 
-function onSetForward() {
-  if (heading.value == null) return;
+/** Capture the initial phone direction once; subsequent readings guide turns. */
+function initializeForward() {
+  if (stage.value !== 'indoor' || navigation.value.paused || heading.value == null
+    || navigation.value.forwardHeading != null) return;
   navigation.value = setForwardHeading(navigation.value, heading.value);
 }
+watch(heading, initializeForward);
+
+// Configuration screens stay opaque and never start a camera preview behind their cards.
+watch([showMapWait, pageOpen, appActive], ([waiting, open, active]) => {
+  if (open && active && !waiting) void openCamera();
+  else {
+    cameraSession += 1;
+    setCameraChrome(false);
+    void stopRearPreview();
+    cameraMessage.value = '';
+  }
+});
 
 function onReset() {
+  walking.stop();
   if (isOutdoor.value) {
     gps.reset();
     return;
@@ -823,6 +872,7 @@ function onArrivalDismiss(event: CustomEvent<{ role?: string }>) {
 }
 
 function endSession() {
+  walking.stop();
   clearAlignTimer();
   resetVoice();
   gps.stop();
@@ -846,10 +896,10 @@ onIonViewDidEnter(() => {
   showEntrance.value = false;
   turnAlignment.value = 'not a turn';
   confirmingRestart.value = false;
-  wentBackground = false;
+  wentBackground.value = false;
   pageOpen.value = true;
   voiceSession.value += 1;
-  void openCamera();
+  appActive.value = true;
   stopHeading();
   stopHeading = watchHeading((value) => {
     heading.value = value;
@@ -859,7 +909,10 @@ onIonViewDidEnter(() => {
   void App.addListener('appStateChange', ({ isActive }) => {
     if (!pageOpen.value) return;
     if (!isActive) {
-      wentBackground = true;
+      appActive.value = false;
+      wentBackground.value = true;
+      walking.stop();
+      if (stage.value === 'indoor') navigation.value = pauseNavigation(navigation.value);
       setCameraChrome(false);
       void stopRearPreview();
       gps.pause();
@@ -867,10 +920,10 @@ onIonViewDidEnter(() => {
       return;
     }
     // Android also reports "active" after permission dialogs close; only resume after a real background trip.
-    if (!wentBackground) return;
-    wentBackground = false;
+    if (!wentBackground.value) return;
+    wentBackground.value = false;
+    appActive.value = true;
     voiceSession.value += 1;
-    void openCamera();
     if (stage.value === 'outdoor') void gps.resume();
   }).then((handle) => {
     if (!pageOpen.value) {
@@ -1190,6 +1243,10 @@ onUnmounted(endSession);
   font-size: 18px;
 }
 
+.walking-calibration { margin: 12px 0; color: #35586d; font-size: 14px; }
+.walking-calibration label { display: block; margin: 8px 0; }
+.walking-calibration input { width: 90px; padding: 8px; }
+
 .indoor-help {
   margin-top: 12px;
 }
@@ -1334,4 +1391,32 @@ html.camera-nav-active ion-content.nav-content::part(background) {
   --ion-background-color: transparent;
 }
 .header-logo { width: 30px; height: 34px; object-fit: contain; flex-shrink: 0; }
+</style>
+
+<style scoped>
+.navigation-layout { display: flex; flex-direction: column; height: 100%; overflow-y: auto; }
+.navigation-layout .camera-frame { flex: 1 0 240px; height: auto; min-height: 240px; }
+.navigation-layout .guidance-sheet { flex: 0 0 auto; margin-top: 0; }
+.walking-fallback { color: #35586d; font-size: 13px; }
+</style>
+
+<style>
+/* Alert overlays inherit camera transparency unless their own surface is explicit. */
+ion-alert.navigation-alert {
+  --background: #ffffff;
+  --ion-background-color: #ffffff;
+  --ion-text-color: #12263f;
+  --color: #12263f;
+  --backdrop-opacity: .55;
+  --max-width: 340px;
+}
+ion-alert.navigation-alert .alert-wrapper { background: #ffffff; color: #12263f; border-radius: 22px; box-shadow: 0 16px 48px #001c4050; }
+ion-alert.navigation-alert .alert-title { color: #12263f; font-size: 21px; font-weight: 800; line-height: 1.3; }
+ion-alert.navigation-alert .alert-message { color: #526b82; font-size: 15px; line-height: 1.5; }
+ion-alert.navigation-alert .alert-button { color: #1d4ed8; font-weight: 700; }
+ion-alert.arrival-alert .alert-head { padding: 24px 24px 8px; text-align: center; }
+ion-alert.arrival-alert .alert-message { padding: 8px 24px 20px; text-align: center; }
+ion-alert.arrival-alert .alert-button-group { padding: 0 20px 20px; }
+ion-alert.arrival-alert .alert-button { flex: 1; margin: 0; min-height: 46px; border-radius: 12px; background: #1d4ed8; color: #ffffff; text-transform: none; }
+ion-alert.arrival-alert .alert-button-group .alert-button .alert-button-inner { width: 100%; justify-content: center; text-align: center; }
 </style>

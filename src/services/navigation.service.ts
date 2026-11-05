@@ -53,6 +53,7 @@ function snapshotFrom(destination: Destination): NavigationSnapshot {
     steps: copy.indoorRoute,
     walkedMeters: 0,
     forwardHeading: null,
+    turnAlignedAt: null,
     paused: false,
   };
 }
@@ -113,12 +114,13 @@ export function setForwardHeading(state: NavigationSnapshot, heading: number): N
 
 /**
  * Heading the phone should face for the current indoor step.
- * Straight uses the calibrated forward heading. Right adds 90°. Left subtracts 90°.
+ * Straight uses the calibrated forward heading. A turn not yet made adds 90° (right) or
+ * subtracts 90° (left); once made, the forward heading already points along the turn.
  * Later this can read an indoor node direction instead of Set Forward.
  */
 export function requiredHeading(state: NavigationSnapshot): number | null {
   if (state.forwardHeading == null) return null;
-  const direction = currentStep(state)?.direction;
+  const direction = needsTurn(state) ? currentSegment(state)?.direction : 'straight';
   const turn = direction === 'right' ? 90 : direction === 'left' ? -90 : 0;
   return normalizeHeading(state.forwardHeading + turn);
 }
@@ -225,10 +227,34 @@ export function nextRouteStep(state: NavigationSnapshot): RouteStep | null {
   return state.steps[currentStepIndex(state) + 1] ?? null;
 }
 
+function turnPending(state: NavigationSnapshot, segment: RouteSegment | null): boolean {
+  return segment != null && segment.direction !== 'straight' && state.turnAlignedAt !== segment.startMeters;
+}
+
+/** True while the phone still has to rotate into the current turn before its distance can be walked. */
+export function needsTurn(state: NavigationSnapshot): boolean {
+  return !hasArrived(state) && turnPending(state, currentSegment(state));
+}
+
+/**
+ * Why estimated walking cannot add distance right now, or null when it can.
+ * Steps only count while the phone faces the path the route expects.
+ */
+export function walkBlockReason(state: NavigationSnapshot, phoneHeading: number | null): string | null {
+  if (state.paused) return 'guidance paused';
+  if (hasArrived(state)) return 'route complete';
+  if (state.forwardHeading == null) return 'forward direction not set';
+  if (needsTurn(state)) return 'turn not made yet';
+  if (phoneHeading == null) return 'phone heading unavailable';
+  const offset = headingOffset(phoneHeading, requiredHeading(state)) ?? 180;
+  if (Math.abs(offset) > FACING_TOLERANCE_DEGREES) return `phone ${Math.round(Math.abs(offset))}° off the path`;
+  return null;
+}
+
 export function isApproachingTurn(state: NavigationSnapshot): boolean {
   const segment = currentSegment(state);
   const upcoming = nextSegment(state);
-  if (!segment || segment.direction !== 'straight' || !upcoming || upcoming.direction === 'straight') return false;
+  if (!segment || turnPending(state, segment) || !upcoming || upcoming.direction === 'straight') return false;
   return currentStepIndex(state) === segment.endIndex;
 }
 
@@ -238,6 +264,7 @@ export function guideArrows(state: NavigationSnapshot): GuideArrow[] {
   const segment = currentSegment(state);
   if (!segment) return [];
   const arrows: GuideArrow[] = [];
+  const turning = turnPending(state, segment);
   let covered = 0;
   for (let index = 0; index < state.steps.length; index += 1) {
     const step = state.steps[index];
@@ -246,7 +273,7 @@ export function guideArrows(state: NavigationSnapshot): GuideArrow[] {
     if (inSegment && state.walkedMeters < stepEnd) {
       arrows.push({
         id: `step-${step.id}`,
-        direction: step.direction,
+        direction: turning ? step.direction : 'straight',
         active: index === currentStepIndex(state),
       });
     }
@@ -267,27 +294,35 @@ export function guideArrows(state: NavigationSnapshot): GuideArrow[] {
 function progressLimit(state: NavigationSnapshot): number {
   const segment = currentSegment(state);
   if (!segment) return totalMeters(state);
-  if (segment.direction !== 'straight') return segment.startMeters;
+  if (turnPending(state, segment)) return segment.startMeters;
   const upcoming = nextSegment(state);
   if (upcoming && upcoming.direction !== 'straight') return upcoming.startMeters;
   return totalMeters(state);
 }
 
-/** Finish the turn the phone is facing and continue on the new heading. */
+/**
+ * Accept the turn the phone is facing: the new heading becomes forward.
+ * Rotating does not add distance; the turn segment is then walked like a straight one.
+ */
 export function completeCurrentTurn(state: NavigationSnapshot): NavigationSnapshot {
-  if (!canProgress(state)) return state;
+  if (!canProgress(state) || hasArrived(state)) return state;
   const segment = currentSegment(state);
-  if (!segment || segment.direction === 'straight' || hasArrived(state)) return state;
+  if (!segment || !turnPending(state, segment)) return state;
   const alignedHeading = requiredHeading(state);
   return {
     ...state,
-    walkedMeters: Math.min(totalMeters(state), segment.endMeters),
     forwardHeading: alignedHeading ?? state.forwardHeading,
+    turnAlignedAt: segment.startMeters,
   };
 }
 
+/** Said when estimated walking covers the whole route. It cannot confirm the user is at the room. */
+export function arrivalInstruction(destinationName: string): string {
+  return `Route distance complete. Look for the ${destinationName} sign.`;
+}
+
 export function navigationInstruction(state: NavigationSnapshot, phoneHeading: number | null = null): string {
-  if (hasArrived(state)) return `You have reached ${state.destinationName}.`;
+  if (hasArrived(state)) return arrivalInstruction(state.destinationName);
   if (state.paused) return PAUSED_INSTRUCTION;
   if (state.forwardHeading == null) return CALIBRATION_INSTRUCTION;
 
@@ -300,13 +335,11 @@ export function navigationInstruction(state: NavigationSnapshot, phoneHeading: n
 }
 
 function routeInstruction(state: NavigationSnapshot): string {
-  const step = currentStep(state);
-  if (step?.direction === 'right' || (isApproachingTurn(state) && nextSegment(state)?.direction === 'right')) {
-    return 'Turn right ahead';
-  }
-  if (step?.direction === 'left' || (isApproachingTurn(state) && nextSegment(state)?.direction === 'left')) {
-    return 'Turn left ahead';
-  }
+  const turn = needsTurn(state)
+    ? currentSegment(state)?.direction
+    : isApproachingTurn(state) ? nextSegment(state)?.direction : null;
+  if (turn === 'right') return 'Turn right ahead';
+  if (turn === 'left') return 'Turn left ahead';
   if (state.walkedMeters === 0) return 'Follow the blue path';
   return 'Continue straight';
 }
@@ -324,8 +357,7 @@ export function moveForward(state: NavigationSnapshot, meters = 1): NavigationSn
 /** Skip to the start of the next route step. */
 export function advanceInstruction(state: NavigationSnapshot): NavigationSnapshot {
   if (!canProgress(state) || hasArrived(state)) return state;
-  const segment = currentSegment(state);
-  if (segment && segment.direction !== 'straight') return state;
+  if (needsTurn(state)) return state;
   const index = currentStepIndex(state);
   let boundary = 0;
   for (let cursor = 0; cursor <= index; cursor += 1) {
@@ -355,7 +387,14 @@ export function resetNavigation(state: NavigationSnapshot): NavigationSnapshot {
   const destination = findDestination(state.destinationId);
   return destination
     ? snapshotFrom(destination)
-    : { ...state, steps: state.steps.map((step) => ({ ...step })), walkedMeters: 0, forwardHeading: null, paused: false };
+    : {
+      ...state,
+      steps: state.steps.map((step) => ({ ...step })),
+      walkedMeters: 0,
+      forwardHeading: null,
+      turnAlignedAt: null,
+      paused: false,
+    };
 }
 
 /** "I lost my way": freezes route progress. It does not move or guess the user's position. */

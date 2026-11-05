@@ -49,6 +49,11 @@ export interface NavigationSnapshot {
    */
   forwardHeading: number | null;
   /**
+   * Start (route meters) of the turn segment the phone has already rotated into.
+   * Rotating only changes the heading; that segment's distance must still be walked.
+   */
+  turnAlignedAt: number | null;
+  /**
    * Set by "I lost my way". Progress, turns, and calibration are frozen until the user
    * resumes or restarts from the entrance. The app never guesses the indoor position.
    */

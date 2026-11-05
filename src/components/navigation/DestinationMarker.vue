@@ -17,6 +17,7 @@ defineProps<{
 
 <style scoped>
 .marker {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 9px;
@@ -48,5 +49,5 @@ defineProps<{
   font-weight: 700;
 }
 .marker-pin { width: 21px; height: 25px; flex-shrink: 0; }
-.marker::after { content: ''; position: absolute; left: 50%; bottom: -16px; width: 28px; height: 7px; border: 2px solid #96edff; background: #06b7ff70; border-radius: 50%; transform: translateX(-50%); box-shadow: 0 0 12px #00baff; }
+.marker::after { content: ''; position: absolute; left: 50%; bottom: -26px; width: 2px; height: 24px; border: 2px solid #96edff; background: #06b7ff70; border-radius: 50%; transform: translateX(-50%); box-shadow: 0 0 12px #00baff; }
 </style>

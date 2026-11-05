@@ -90,3 +90,53 @@ Limits: one building per graph, one image per floor within a published route, ma
 confirmation, no live elevator status, no offline graph sync, no real-time route invalidation during
 an active session, and no precise indoor position or automatic rerouting. Signed map URLs last one
 hour; refresh/replan after expiry. Existing fixed camera routes remain a separate navigation mode.
+
+
+## Camera route walking progress
+
+The camera/fixed-route navigator starts estimated walking progress automatically after
+entrance confirmation. Stand at the entrance facing the first corridor before confirming.
+The first available phone heading sets the route's initial forward direction once; later
+headings guide turns. There are no Set Forward or Enable walking buttons in the normal guide.
+If heading data is unavailable, guidance waits for phone direction without inventing a heading.
+
+All users start with a shared 0.70 m per step estimate. A previously saved valid personal
+step length overrides this default. It is not a measured calibration for every user.
+Linear-acceleration peaks subtract this step length from remaining meters, displayed to at
+most one decimal place. This is estimated walking progress, not precise indoor positioning.
+Progress requires active, unpaused indoor guidance and alignment with the path. Walking
+stops at turn boundaries. Holding the turn heading for 750 ms only accepts the new direction;
+it adds no distance. The turn step's own distance must then be walked like a straight step.
+Arrival means the estimated walked distance reached the route length, so the alert says
+"Estimated route complete" and asks the user to look for the room sign.
+
+The normal guide shows the arrow area, destination/distance/instruction card and I lost my way.
+Motion errors show a retry action; manual progress controls remain in development tools.
+The camera stays off during entrance/location configuration and starts only when the guide
+is visible. The guide uses the remaining screen height for the camera area. Backgrounding
+pauses indoor guidance and stops walking. Resume from the same physical position restarts
+walking; restart requires entrance confirmation and captures the initial direction again.
+Leaving removes motion listeners and closes the camera.
+
+Verify sensor sensitivity, stationary/shaking behavior, heading, permissions, background/resume,
+turns, camera layout and arrival on an actual Android device. This does not change the
+floor-map explorer's explicit checkpoint confirmation workflow.
+
+
+Walking false-positive guard: isolated acceleration peaks no longer advance the route.
+Detection requires complete 60?350 ms pulses, 350?1100 ms intervals and four consistent
+candidate strides before counting. Once the fourth consistent stride confirms the rhythm,
+all four are credited, then one per stride. Pulses that never form that rhythm add nothing.
+Large jolts, reported rotation above 60 degrees/second, facing away from the path (over 25°),
+and missing heading reset detection. Without `event.acceleration`, gravity is removed from
+`accelerationIncludingGravity` with a 500 ms low-pass estimate; this fallback is untested on
+a device. These are heuristic thresholds pending on-device validation, not proof of user
+displacement; rhythmic shaking can still resemble walking.
+
+### Development diagnostics
+
+`npm run dev` shows a "Walking diagnostics" list inside the indoor Debug panel: motion source and
+sample rate, acceleration x/y/z and magnitude, rotation rate, candidate and accepted steps,
+walking block reason, last step rejection reason, step length and its source (default or saved),
+walked and route meters, and the arrival trigger. Release builds and APKs do not render it and do
+not collect these readings.

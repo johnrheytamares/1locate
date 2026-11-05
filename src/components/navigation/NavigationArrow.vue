@@ -2,12 +2,12 @@
   <svg
     class="arrow"
     :class="[direction, { dimmed, active }]"
-    :viewBox="direction === 'up' ? '0 0 80 96' : '0 0 104 84'"
+    :viewBox="direction === 'up' ? '0 0 160 80' : '0 0 104 84'"
     aria-hidden="true"
   >
     <template v-if="direction === 'up'">
-      <path class="body" d="M5 54 L40 12 L75 54 V82 L40 45 L5 82 Z" />
-      <path class="shine" d="M9 55 L40 19 L71 55 V61 L40 30 L9 61 Z" />
+      <path class="body" d="M7 48 L80 7 L153 48 L159 76 L80 39 L1 76 Z" />
+      <path class="shine" d="M10 49 L80 12 L150 49 L152 59 L80 26 L8 59 Z" />
     </template>
     <template v-else>
       <path class="body" d="M22 78 V46 H58 V28 L90 52 L58 76 V58 H38 V78 Z" />
@@ -47,9 +47,9 @@ defineProps<{
 }
 
 .body {
-  fill: rgba(0, 185, 255, 0.9);
+  fill: rgba(51, 220, 255, 0.94);
   stroke: rgba(236, 251, 255, 0.95);
-  stroke-width: 3;
+  stroke-width: 2;
   stroke-linejoin: round;
 }
 

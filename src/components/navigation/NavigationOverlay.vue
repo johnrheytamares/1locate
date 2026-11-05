@@ -3,13 +3,14 @@
     <p v-if="instruction" class="guide">{{ instruction }}</p>
     <div class="path-shift" :style="shiftStyle">
     <DestinationMarker :name="destinationName" :distance-label="distanceLabel" />
-    <div class="lane">
+    <div v-if="arrows.length" class="lane">
+      <span class="path-beacon" />
       <div
         v-for="arrow in farToNear"
         :key="arrow.id"
         class="slot"
         :class="arrow.direction"
-        :style="{ transform: `scale(${arrow.scale})` }"
+        :style="{ top: `${arrow.position}%`, width: `${arrow.width}px` }"
       >
         <NavigationArrow
           :direction="arrowFacing(arrow.direction)"
@@ -50,12 +51,22 @@ function arrowFacing(direction: RouteDirection): 'up' | 'right' | 'left' {
   return 'up';
 }
 
+// Decorative trail density is independent of route-step count.
+// Only the distant tip shows an upcoming turn; nearby chevrons keep pointing along the path.
 const farToNear = computed(() => {
-  const count = props.arrows.length;
-  return props.arrows.map((arrow, index) => ({
-    ...arrow,
-    scale: count <= 1 ? 1 : 0.4 + ((count - 1 - index) / (count - 1)) * 0.85,
-  })).reverse();
+  if (!props.arrows.length) return [];
+  const farthest = props.arrows[props.arrows.length - 1];
+  const current = props.arrows[0];
+  return Array.from({ length: 10 }, (_, index) => {
+    const depth = index / 9;
+    return {
+      id: `trail-${index}`,
+      direction: index === 0 ? farthest.direction : current.direction,
+      active: index >= 7,
+      position: 3 + Math.pow(depth, 1.8) * 87,
+      width: 14 + Math.pow(depth, 1.65) * 190,
+    };
+  });
 });
 </script>
 
@@ -90,45 +101,47 @@ const farToNear = computed(() => {
 }
 
 .lane {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: space-between;
   position: absolute;
-  bottom: 0;
+  top: 29%;
+  bottom: -8%;
   left: 0;
-  gap: 0;
   width: 100%;
-  height: 72%;
-  padding: 0 0 10px;
-  transform: perspective(620px) rotateX(32deg);
-  transform-origin: center bottom;
 }
-
+.lane::before {
+  content: '';
+  position: absolute;
+  inset: 0 -5% -8%;
+  clip-path: polygon(49% 0, 51% 0, 87% 100%, 13% 100%);
+  background: linear-gradient(180deg, #00cfff30, #009cff65 55%, #006fff90);
+  filter: blur(6px);
+}
+.lane::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  clip-path: polygon(49.5% 0, 50.5% 0, 69% 100%, 31% 100%);
+  background: linear-gradient(180deg, #a4faff60, #00baff25);
+}
 .slot {
-  display: flex;
-  justify-content: center;
-  position: relative;
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
   z-index: 1;
-  transform-origin: center;
-  flex: 0 1 auto;
-  min-height: 0;
 }
-
-.slot:last-child {
-  margin-top: 0;
+.slot :deep(.arrow) { width: 100%; height: auto; }
+.path-beacon {
+  position: absolute;
+  left: 50%;
+  top: -2%;
+  width: 34px;
+  height: 9px;
+  transform: translateX(-50%);
+  border: 2px solid #d7ffff;
+  border-radius: 50%;
+  background: #00bfff;
+  box-shadow: 0 0 6px #fff, 0 0 16px #00bfff, 0 0 28px #007dff;
+  z-index: 2;
 }
-
-.slot.left {
-  align-self: flex-start;
-  margin-left: 28px;
-}
-
-.slot.right {
-  align-self: flex-end;
-  margin-right: 28px;
-}
-.lane::before { content: ''; position: absolute; inset: 0 -12px -20px; background: linear-gradient(180deg, transparent, #00b9ff10 20%, #00b9ff50); clip-path: polygon(48% 0, 52% 0, 90% 100%, 10% 100%); filter: blur(5px); }
-.path-shift > :deep(.marker) { position: absolute; top: 4%; left: 50%; transform: translateX(-50%); z-index: 2; }
+.path-shift > :deep(.marker) { position: absolute; top: 7%; left: 50%; transform: translateX(-50%); z-index: 2; }
 @media (prefers-reduced-motion: reduce) { .path-shift { transition: none; } }
 </style>

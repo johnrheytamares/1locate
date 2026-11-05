@@ -6,7 +6,12 @@ import {
   toCatalogDestination,
   toDestination,
 } from '@/services/destination-repository';
-import { getDestinations, selectDestination, setDestinationCatalog } from '@/services/navigation.service';
+import {
+  getDestinations,
+  getSelectedDestination,
+  selectDestination,
+  setDestinationCatalog,
+} from '@/services/navigation.service';
 import { DESTINATIONS } from '@/data/destinations';
 import type { DestinationImage } from '@/models/campus';
 
@@ -102,6 +107,7 @@ describe('Supabase destination rows', () => {
     expect(toDestination(row({ name: 'x'.repeat(121) }))).toBeNull();
     expect(toDestination(row({ entrance_lat: 95, entrance_lng: 121 }))).toBeNull();
     expect(toDestination(row({ entrance_lat: 13.4, entrance_lng: null }))).toBeNull();
+    expect(toDestination(row({ entrance_lat: '13.4', entrance_lng: '121.2' }))).toBeNull();
     expect(toDestination(row({ arrival_radius: 0 }))).toBeNull();
     expect(toDestination(row({ arrival_radius: '10' }))).toBeNull();
     expect(toDestination(row({ indoor_route: [] }))).toBeNull();
@@ -123,6 +129,15 @@ describe('Supabase destination rows', () => {
     expect(selectDestination('library')).toBeNull();
     setDestinationCatalog(DESTINATIONS);
     expect(getDestinations()).toHaveLength(4);
+  });
+
+  test('reopening navigation after a catalog refresh uses the updated entrance coordinates', () => {
+    setDestinationCatalog([toDestination(row({ entrance_lat: 80, entrance_lng: 78 }))!]);
+    selectDestination('registrar');
+    expect(getSelectedDestination()?.outdoorTarget).toMatchObject({ latitude: 80, longitude: 78 });
+
+    setDestinationCatalog([toDestination(row({ entrance_lat: 13.4, entrance_lng: 121.2 }))!]);
+    expect(getSelectedDestination()?.outdoorTarget).toMatchObject({ latitude: 13.4, longitude: 121.2 });
   });
 });
 

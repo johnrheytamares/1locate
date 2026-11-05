@@ -1,6 +1,6 @@
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils';
 import { afterEach, describe, expect, test, vi } from 'vitest';
-import type { NavigationSnapshot } from '@/models/navigation';
+import { TURN_ALIGNMENT_HOLD_MS, type NavigationSnapshot } from '@/models/navigation';
 
 const mocks = vi.hoisted(() => ({
   replace: vi.fn(),
@@ -151,7 +151,7 @@ describe('"I lost my way"', () => {
 
   test('does nothing after arrival', () => {
     const arrived = updateRouteProgress(completeCurrentTurn(updateRouteProgress(walkedRoute(), 10)), 10);
-    expect(navigationInstruction(arrived)).toBe('You have reached Registrar Office.');
+    expect(navigationInstruction(arrived)).toBe('Route distance complete. Look for the Registrar Office sign.');
     expect(pauseNavigation(arrived).paused).toBe(false);
   });
 
@@ -204,7 +204,7 @@ describe('Camera Navigation recovery screen', () => {
     wrapper = null;
   });
 
-  const instruction = () => wrapper!.find('.instruction-banner strong').text();
+  const instruction = () => wrapper!.find('.journey-instruction strong').text();
   const distance = () => wrapper!.find('[data-test="journey-distance"]').text();
   const button = (label: string) => {
     const found = wrapper!.findAll('ion-button').find((item) => item.text().trim() === label);
@@ -230,7 +230,6 @@ describe('Camera Navigation recovery screen', () => {
   async function startIndoor() {
     await reachEntrance();
     await dismissEntrance('confirm');
-    await button('Set Forward').trigger('click');
     await button('Move Forward').trigger('click');
     await button('Move Forward').trigger('click');
   }
@@ -244,8 +243,8 @@ describe('Camera Navigation recovery screen', () => {
     expect(wrapper!.find('[data-test="lost-way"]').exists()).toBe(false);
 
     await dismissEntrance('confirm');
-    expect(instruction()).toBe(CALIBRATION_INSTRUCTION);
-    expect(wrapper!.find('[data-test="indoor-scope"]').text()).toContain('will not notice if you leave the route');
+    expect(instruction()).toBe('Turn right ahead');
+    expect(wrapper!.find('[data-test="set-forward"]').exists()).toBe(false);
   });
 
   test('"I lost my way" pauses progress and explains the limitation', async () => {
@@ -256,7 +255,7 @@ describe('Camera Navigation recovery screen', () => {
     expect(instruction()).toBe(PAUSED_INSTRUCTION);
     expect(wrapper!.find('[data-test="recovery"]').text()).toContain('cannot tell where you are inside the building');
 
-    expect(wrapper!.find('[data-test="move-forward"]').exists()).toBe(false);
+    expect((wrapper!.find('[data-test="move-forward"]').element as unknown as { disabled: boolean }).disabled).not.toBe(true);
     await button('Next Step').trigger('click');
     expect(distance()).toContain('5 m');
   });
@@ -286,9 +285,9 @@ describe('Camera Navigation recovery screen', () => {
     await wrapper!.find('[data-test="restart"]').trigger('click');
     await wrapper!.find('[data-test="confirm-entrance"]').trigger('click');
     expect(distance()).toContain('7 m');
-    expect(instruction()).toBe(CALIBRATION_INSTRUCTION);
+    expect(instruction()).toBe('Turn right ahead');
     await button('Move Forward').trigger('click');
-    expect(distance()).toContain('7 m');
+    expect(distance()).toContain('6 m');
   });
 
   test('Choose another destination clears the selection and returns to the list', async () => {
@@ -305,6 +304,128 @@ describe('Camera Navigation recovery screen', () => {
     await dismissEntrance('cancel');
     expect(getSelectedDestination()).toBeNull();
     expect(mocks.replace).toHaveBeenCalledWith('/destinations');
+  });
+});
+
+describe('Camera Navigation distance', () => {
+  let wrapper: VueWrapper | null = null;
+
+  afterEach(() => {
+    wrapper?.unmount();
+    wrapper = null;
+  });
+
+  test('outdoors shows the rounded GPS distance to the entrance; indoors the remaining route', async () => {
+    selectDestination('registrar');
+    wrapper = mount(ARNavigationPage, { global: { stubs: { IonBackButton: true, NavigationOverlay: true } } });
+    await flushPromises();
+    mocks.gps!.state.value = {
+      ...mocks.gps!.state.value,
+      target: { name: 'Main Entrance', latitude: 80, longitude: 78, arrivalRadius: 10, source: 'surveyed' },
+      location: { latitude: 13.41, longitude: 121.18, accuracy: 5, speed: null, timestamp: 1000 },
+      distance: 7_721_222.6,
+      bearing: 350,
+    };
+    await flushPromises();
+
+    expect(wrapper.find('.journey-identity').text()).toContain('Building entrance');
+    expect(wrapper.find('.journey-identity h2').text()).toBe('Main Entrance');
+    expect(wrapper.find('[data-test="journey-distance"]').text()).toBe('Distance: 7721223 m');
+
+    mocks.gps!.state.value = { ...mocks.gps!.state.value, arrived: true };
+    await flushPromises();
+    wrapper.findAllComponents(IonAlert)[0].vm.$emit(
+      'didDismiss',
+      new CustomEvent('ionAlertDidDismiss', { detail: { role: 'confirm' } }),
+    );
+    await flushPromises();
+    expect(wrapper.find('[data-test="journey-distance"]').text()).toBe('Est. remaining: 7 m');
+  });
+
+  async function enterIndoorDev() {
+    selectDestination('registrar');
+    wrapper = mount(ARNavigationPage, { global: { stubs: { IonBackButton: true, NavigationOverlay: true } } });
+    await flushPromises();
+    mocks.heading?.(90);
+    mocks.gps!.state.value = { ...mocks.gps!.state.value, arrived: true };
+    await flushPromises();
+    wrapper.findAllComponents(IonAlert)[0].vm.$emit(
+      'didDismiss',
+      new CustomEvent('ionAlertDidDismiss', { detail: { role: 'confirm' } }),
+    );
+    await flushPromises();
+  }
+  const moveForwardButton = () => wrapper!.find('[data-test="move-forward"]');
+  const distance = () => wrapper!.find('[data-test="journey-distance"]').text();
+
+  test('turning the phone at a turn changes the direction but not the remaining distance', async () => {
+    await enterIndoorDev();
+    for (let index = 0; index < 3; index += 1) await moveForwardButton().trigger('click');
+    expect(distance()).toBe('Est. remaining: 4 m');
+
+    mocks.heading?.(180);
+    await flushPromises();
+    await new Promise((resolve) => setTimeout(resolve, TURN_ALIGNMENT_HOLD_MS + 100));
+    await flushPromises();
+    expect(wrapper!.find('.journey-instruction strong').text()).toBe('Continue straight');
+    expect(distance()).toBe('Est. remaining: 4 m');
+
+    mocks.heading?.(90);
+    await flushPromises();
+    mocks.heading?.(180);
+    await flushPromises();
+    await new Promise((resolve) => setTimeout(resolve, TURN_ALIGNMENT_HOLD_MS + 100));
+    expect(distance()).toBe('Est. remaining: 4 m');
+
+    await moveForwardButton().trigger('click');
+    expect(distance()).toBe('Est. remaining: 3 m');
+  });
+
+  test('the estimated arrival alert does not claim the user is at the room', async () => {
+    await enterIndoorDev();
+    for (let index = 0; index < 3; index += 1) await moveForwardButton().trigger('click');
+    mocks.heading?.(180);
+    await flushPromises();
+    await new Promise((resolve) => setTimeout(resolve, TURN_ALIGNMENT_HOLD_MS + 100));
+    for (let index = 0; index < 4; index += 1) await moveForwardButton().trigger('click');
+    await flushPromises();
+    const arrival = wrapper!.findAllComponents(IonAlert).find((alert) => alert.props('isOpen') && alert.props('header') === 'Estimated route complete');
+    expect(arrival).toBeDefined();
+    expect(arrival!.props('message')).toContain('cannot confirm you are at the room');
+    expect(arrival!.props('message')).not.toMatch(/you have reached/i);
+  });
+
+  test('the debug panel shows walking diagnostics from motion samples during development', async () => {
+    vi.stubGlobal('DeviceMotionEvent', class {});
+    await enterIndoorDev();
+    const panel = () => wrapper!.find('[data-test="walking-diagnostics"]').text();
+    expect(panel()).toContain('Step Length: 0.70 m (default)');
+    expect(panel()).toContain('Walking Blocked: no');
+    expect(panel()).toContain('Arrival Trigger: estimated walked ≥ route length (not met)');
+
+    const sample = (x: number) => {
+      const event = new Event('devicemotion');
+      Object.defineProperty(event, 'acceleration', { value: { x, y: 0, z: 0 } });
+      Object.defineProperty(event, 'rotationRate', { value: { alpha: 5, beta: 10, gamma: 15 } });
+      window.dispatchEvent(event);
+    };
+    const clock = vi.spyOn(performance, 'now');
+    for (let step = 0; step < 4; step += 1) {
+      clock.mockReturnValue(10_000 + step * 500); sample(0); sample(2);
+      clock.mockReturnValue(10_000 + step * 500 + 100); sample(0);
+    }
+    clock.mockRestore();
+    await flushPromises();
+    expect(panel()).toContain('Motion: listening · linear');
+    expect(panel()).toContain('Rotation α/β/γ: 5, 10, 15 °/s');
+    expect(panel()).toContain('Steps: 4 candidate · 4 accepted');
+    expect(panel()).toContain('Walked: 2.80 m of 7 m');
+    expect(distance()).toBe('Est. remaining: 4.2 m');
+
+    mocks.heading?.(200);
+    await flushPromises();
+    expect(panel()).toContain('Walking Blocked: phone 110° off the path');
+    vi.unstubAllGlobals();
   });
 });
 
@@ -352,28 +473,47 @@ describe('Camera Navigation in a release build', () => {
 
     alert.vm.$emit('didDismiss', new CustomEvent('ionAlertDidDismiss', { detail: { role: 'confirm' } }));
     await flushPromises();
-    expect(wrapper!.find('[data-test="set-forward"]').exists()).toBe(true);
+    expect(wrapper!.find('[data-test="set-forward"]').exists()).toBe(false);
+    expect(wrapper!.find('[data-test="lost-way"]').exists()).toBe(true);
   });
 
-  test('Set Forward and Move Forward stay available indoors, in order', async () => {
+  test('starts walking automatically and keeps only guide controls in release', async () => {
+    vi.stubGlobal('DeviceMotionEvent', class {});
     await mountRelease();
+    const { startRearPreview } = await import('@/services/camera.service');
+    expect(startRearPreview).not.toHaveBeenCalled();
     await wrapper!.find('[data-test="at-entrance"]').trigger('click');
     await flushPromises();
+    expect(startRearPreview).not.toHaveBeenCalled();
     wrapper!.findAllComponents(IonAlert)[0].vm.$emit(
-      'didDismiss',
-      new CustomEvent('ionAlertDidDismiss', { detail: { role: 'confirm' } }),
+      'didDismiss', new CustomEvent('ionAlertDidDismiss', { detail: { role: 'confirm' } }),
     );
     await flushPromises();
-
-    const move = () => wrapper!.find('[data-test="move-forward"]');
-    const disabled = () => (move().element as unknown as { disabled: boolean }).disabled;
-    expect(disabled()).toBe(true);
-    expect(texts()).not.toContain('Next Step');
-
-    await wrapper!.find('[data-test="set-forward"]').trigger('click');
-    expect(disabled()).toBe(false);
-    await move().trigger('click');
-    expect(wrapper!.find('[data-test="journey-distance"]').text()).toContain('6 m');
+    expect(startRearPreview).toHaveBeenCalledTimes(1);
+    expect(wrapper!.find('[data-test="set-forward"]').exists()).toBe(false);
+    expect(wrapper!.find('[data-test="move-forward"]').exists()).toBe(false);
+    expect(wrapper!.find('.walking-calibration').exists()).toBe(false);
+    expect(wrapper!.find('.instruction-banner').exists()).toBe(false);
+    expect(texts()).not.toContain('Enable automatic walking');
+    const sample = (x: number) => {
+      const event = new Event('devicemotion');
+      Object.defineProperty(event, 'acceleration', { value: { x, y: 0, z: 0 } });
+      window.dispatchEvent(event);
+    };
+    const clock = vi.spyOn(performance, 'now');
+    for (let step = 0; step < 4; step += 1) {
+      clock.mockReturnValue(step * 500); sample(0); sample(2);
+      clock.mockReturnValue(step * 500 + 100); sample(0);
+    }
+    clock.mockRestore();
+    await flushPromises();
+    expect(wrapper!.find('[data-test="journey-distance"]').text()).toBe('Est. remaining: 4.2 m');
+    expect(wrapper!.find('[data-test="walking-diagnostics"]').exists()).toBe(false);
+    expect(wrapper!.text()).not.toContain('Arrival Trigger');
+    mocks.heading?.(180);
+    await flushPromises();
+    expect(wrapper!.find('.journey-instruction').text()).toContain('face the path');
+    vi.unstubAllGlobals();
   });
 });
 
@@ -404,17 +544,16 @@ describe('Camera Navigation voice guidance', () => {
     await flushPromises();
   }
 
-  test('announces the entrance check, then asks for Set Forward', async () => {
+  test('announces the entrance check, then starts guidance automatically', async () => {
     await enterIndoor();
     expect(spoken()).toContain(
       'You are near Administration Building Entrance. Start the indoor route only when you are standing at the entrance.',
     );
-    expect(spoken().at(-1)).toBe('Point your phone along the path, then tap Set Forward.');
+    expect(spoken().at(-1)).toBe('Turn right ahead.');
   });
 
   test('speaks straight-ahead instructions', async () => {
     await enterIndoor('library');
-    await button('Set Forward').trigger('click');
     await flushPromises();
     expect(spoken().at(-1)).toBe('Go straight ahead.');
 
@@ -425,18 +564,16 @@ describe('Camera Navigation voice guidance', () => {
 
   test('speaks an upcoming turn once, however many steps it stays on screen', async () => {
     await enterIndoor();
-    await button('Set Forward').trigger('click');
     await button('Move Forward').trigger('click');
     await button('Move Forward').trigger('click');
     await flushPromises();
-    expect(wrapper!.find('.instruction-banner strong').text()).toBe('Turn right ahead');
+    expect(wrapper!.find('.journey-instruction strong').text()).toBe('Turn right ahead');
     expect(spoken().at(-1)).toBe('Turn right ahead.');
     expect(spoken().filter((text) => text === 'Turn right ahead.')).toHaveLength(1);
   });
 
   test('"I lost my way" is explained out loud', async () => {
     await enterIndoor();
-    await button('Set Forward').trigger('click');
     await wrapper!.find('[data-test="lost-way"]').trigger('click');
     await flushPromises();
     expect(spoken().at(-1)).toContain('1Locate cannot tell where you are inside the building');
@@ -452,7 +589,7 @@ describe('Camera Navigation voice guidance', () => {
     expect(wrapper!.find('[data-test="voice-toggle"]').attributes('aria-label')).toBe('Turn voice guidance on');
 
     const before = mocks.speak.mock.calls.length;
-    await button('Set Forward').trigger('click');
+    mocks.heading?.(180);
     await flushPromises();
     expect(mocks.speak.mock.calls.length).toBe(before);
 

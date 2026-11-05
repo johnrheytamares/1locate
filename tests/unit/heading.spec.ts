@@ -1,20 +1,25 @@
 import { describe, expect, test } from 'vitest';
 import { FACING_TOLERANCE_DEGREES, type NavigationSnapshot } from '@/models/navigation';
 import {
+  arrivalInstruction,
   completeCurrentTurn,
   createTestNavigation,
   getCurrentMode,
   getDestinations,
   guideArrows,
+  hasArrived,
   indoorRouteMeters,
   jumpToRightTurn,
   moveForward,
   navigationInstruction,
+  needsTurn,
+  remainingMeters,
   requiredHeading,
   resetNavigation,
   selectDestination,
   setForwardHeading,
   updateRouteProgress,
+  walkBlockReason,
 } from '@/services/navigation.service';
 import { normalizeHeading, shortestSignedDelta, smoothHeading } from '@/services/orientation.service';
 
@@ -34,6 +39,7 @@ function turnRoute(): NavigationSnapshot {
     ],
     walkedMeters: 0,
     forwardHeading: null,
+    turnAlignedAt: null,
     paused: false,
   };
 }
@@ -139,23 +145,70 @@ describe('campus destinations', () => {
     expect(navigationInstruction(approaching, 20)).toBe('Turn right ahead');
   });
 
-  test('holds the route on a turn until that turn is completed by heading', () => {
+  test('holds the route on a turn until the phone turns, then the turn step must be walked', () => {
     const atTurn = jumpToRightTurn(setForwardHeading(turnRoute(), 80));
     expect(guideArrows(atTurn).map((arrow) => arrow.direction)).toEqual(['right']);
     expect(moveForward(atTurn, 5).walkedMeters).toBe(atTurn.walkedMeters);
-    const continued = completeCurrentTurn(atTurn);
-    expect(continued.forwardHeading).toBe(170);
-    expect(continued.walkedMeters).toBeGreaterThan(atTurn.walkedMeters);
-    expect(guideArrows(continued).some((arrow) => arrow.direction === 'straight')).toBe(true);
-    expect(guideArrows(continued).filter((arrow) => arrow.direction === 'right')).toHaveLength(1);
-    expect(navigationInstruction(continued, 170)).toBe('Turn right ahead');
+
+    const turned = completeCurrentTurn(atTurn);
+    expect(turned.forwardHeading).toBe(170);
+    expect(turned.walkedMeters).toBe(atTurn.walkedMeters);
+    expect(remainingMeters(turned)).toBe(remainingMeters(atTurn));
+    expect(requiredHeading(turned)).toBe(170);
+    expect(needsTurn(turned)).toBe(false);
+    expect(guideArrows(turned).map((arrow) => arrow.direction)).toEqual(['straight']);
+    expect(navigationInstruction(turned, 170)).toBe('Continue straight');
+    expect(completeCurrentTurn(turned)).toBe(turned);
+
+    const walkedTurn = moveForward(turned, 3);
+    expect(walkedTurn.walkedMeters).toBe(11);
+    expect(navigationInstruction(walkedTurn, 170)).toBe('Turn right ahead');
+
+    const atSecondTurn = moveForward(walkedTurn, 10);
+    expect(atSecondTurn.walkedMeters).toBe(14);
+    expect(needsTurn(atSecondTurn)).toBe(true);
+    expect(requiredHeading(atSecondTurn)).toBe(260);
+    expect(moveForward(atSecondTurn, 1).walkedMeters).toBe(14);
   });
 
-  test('reaches the final indoor destination after the last step', () => {
+  test('rotating back and forth at a turn never reduces the remaining distance', () => {
+    let state = jumpToRightTurn(setForwardHeading(turnRoute(), 0));
+    const remaining = remainingMeters(state);
+    for (let index = 0; index < 5; index += 1) state = completeCurrentTurn(state);
+    expect(remainingMeters(state)).toBe(remaining);
+    expect(state.forwardHeading).toBe(90);
+  });
+
+  test('reaches the end of the route only after the turn step is walked too', () => {
     const indoor = setForwardHeading(createTestNavigation(), 0);
     const atTurn = updateRouteProgress(indoor, 10);
     expect(atTurn.walkedMeters).toBe(3);
-    const finished = updateRouteProgress(completeCurrentTurn(atTurn), 10);
-    expect(navigationInstruction(finished, 90)).toBe('You have reached Registrar Office.');
+    const turned = completeCurrentTurn(atTurn);
+    expect(hasArrived(turned)).toBe(false);
+    expect(hasArrived(updateRouteProgress(turned, 3.9))).toBe(false);
+    const finished = updateRouteProgress(turned, 10);
+    expect(hasArrived(finished)).toBe(true);
+    expect(navigationInstruction(finished, 90)).toBe(arrivalInstruction('Registrar Office'));
+    expect(arrivalInstruction('Registrar Office')).not.toMatch(/you have reached/i);
+  });
+});
+
+describe('when estimated walking may add distance', () => {
+  const ready = () => setForwardHeading(turnRoute(), 100);
+
+  test('only while facing the current path direction', () => {
+    expect(walkBlockReason(ready(), 100)).toBeNull();
+    expect(walkBlockReason(ready(), 100 + FACING_TOLERANCE_DEGREES)).toBeNull();
+    expect(walkBlockReason(ready(), 100 + FACING_TOLERANCE_DEGREES + 5)).toBe('phone 30° off the path');
+    expect(walkBlockReason(ready(), null)).toBe('phone heading unavailable');
+  });
+
+  test('never before the forward direction, while paused, at an unmade turn, or after the route ends', () => {
+    expect(walkBlockReason(turnRoute(), 100)).toBe('forward direction not set');
+    expect(walkBlockReason({ ...ready(), paused: true }, 100)).toBe('guidance paused');
+    const atTurn = jumpToRightTurn(ready());
+    expect(walkBlockReason(atTurn, 190)).toBe('turn not made yet');
+    expect(walkBlockReason(completeCurrentTurn(atTurn), 190)).toBeNull();
+    expect(walkBlockReason({ ...ready(), walkedMeters: 18 }, 100)).toBe('route complete');
   });
 });

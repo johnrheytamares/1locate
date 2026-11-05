@@ -23,9 +23,11 @@ import {
   outdoorInstruction,
   processLocation,
   surveyedTarget,
+  withTarget,
   type GpsTarget,
   type OutdoorState,
 } from '@/services/outdoor-navigation.service';
+import { toDestination } from '@/services/destination-repository';
 
 const ORIGIN = { latitude: 0, longitude: 0 };
 
@@ -52,6 +54,15 @@ describe('geo math', () => {
     expect(calculateDistance(0, 0, 1, 0)).toBeCloseTo(111_195, -1);
     expect(calculateDistance(0, 0, 0, 1)).toBeCloseTo(111_195, -1);
     expect(calculateDistance(0, 0, 0.0001, 0)).toBeCloseTo(11.12, 1);
+  });
+
+  test('long distances and latitude scaling use the 6,371 km Earth radius', () => {
+    const halfCircumference = Math.PI * 6_371_000;
+    expect(calculateDistance(0, 0, 0, 180)).toBeCloseTo(halfCircumference, 0);
+    expect(calculateDistance(90, 0, -90, 0)).toBeCloseTo(halfCircumference, 0);
+    // One degree of longitude shrinks with cos(latitude): about half at 60°.
+    expect(calculateDistance(60, 0, 60, 1)).toBeCloseTo(55_597, -1);
+    expect(calculateDistance(13.4, 121.2, 13.4, 121.2)).toBe(0);
   });
 
   test('bearing uses 0 North, 90 East, 180 South, 270 West', () => {
@@ -132,6 +143,44 @@ describe('GPS updates', () => {
     state = processLocation(state, fixAt(500, 90, 5, 1000 + MAX_CONSECUTIVE_REJECTS * 1000));
     expect(state.lastRejectReason).toBeNull();
     expect(calculateDistance(0, 0, state.location!.latitude, state.location!.longitude)).toBeCloseTo(500, 0);
+  });
+
+  test('a saved entrance row keeps latitude/longitude order through to the distance', () => {
+    // Coordinates from the reported case. The user point is a reference only, not a real phone location.
+    const saved = toDestination({
+      id: 'registrar',
+      name: '101',
+      building: 'BSIT',
+      type: 'Classroom',
+      entrance_name: 'Main Entrance',
+      entrance_lat: 80,
+      entrance_lng: 78,
+      arrival_radius: 10,
+      indoor_route: [{ id: 1, direction: 'straight', distance: 3 }],
+    });
+    const entrance = surveyedTarget(saved!.outdoorTarget);
+    expect(entrance).toMatchObject({ latitude: 80, longitude: 78, source: 'surveyed' });
+
+    const user = { latitude: 13.41, longitude: 121.18, accuracy: 5, speed: null, timestamp: 1000 };
+    const state = processLocation(createOutdoorState(entrance), user);
+    const expected = calculateDistance(13.41, 121.18, 80, 78);
+    expect(state.distance).toBeCloseTo(expected, 3);
+    expect(state.distance! / 1000).toBeCloseTo(7718.8, 0);
+    // Swapping either pair would give a very different number.
+    expect(Math.abs(state.distance! - calculateDistance(13.41, 121.18, 78, 80))).toBeGreaterThan(100_000);
+  });
+
+  test('changing the target recomputes distance at once and restarts arrival', () => {
+    let state = processLocation(createOutdoorState(target()), fixAt(0, 0, 5, 1000));
+    expect(state.distance).toBeCloseTo(50, 3);
+    const nearer = createTestTarget(ENTRANCE, ORIGIN, 0, 20);
+    state = withTarget({ ...state, arrivalUpdates: 2, arrivalSince: 500 }, nearer);
+    expect(state.distance).toBeCloseTo(20, 3);
+    expect(state.arrivalUpdates).toBe(0);
+    expect(state.arrivalSince).toBeNull();
+    state = processLocation(state, fixAt(0, 0, 5, 2000));
+    expect(state.distance).toBeCloseTo(20, 3);
+    expect(withTarget(state, null).distance).toBeNull();
   });
 
   test('smooths small movements and drops stale readings', () => {

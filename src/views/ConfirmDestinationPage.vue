@@ -62,7 +62,7 @@
             <li>
               <span class="fact-icon" aria-hidden="true"><ion-icon :icon="swapHorizontalOutline" /></span>
               <span class="fact-label">Distance</span>
-              <span class="fact-value">{{ summary.indoorMeters }} m indoors</span>
+              <span class="fact-value">{{ Number(summary.indoorMeters.toFixed(1)) }} m indoors</span>
             </li>
             <li v-if="summary.floor">
               <span class="fact-icon" aria-hidden="true"><ion-icon :icon="layersOutline" /></span>
@@ -83,6 +83,10 @@
           </div>
         </section>
 
+
+      </template>
+    </ion-content>
+    <ion-footer v-if="state === 'ready' && summary && destination" class="confirm-footer">
         <div class="actions">
           <ion-button v-if="destination.details?.roomId" expand="block" fill="outline" class="back" :router-link="{ path: '/indoor-map', query: { room: destination.details.roomId } }">Plan a floor-map route</ion-button>
           <ion-button expand="block" class="start" data-test="start" @click="onStart">
@@ -94,8 +98,7 @@
             Back
           </ion-button>
         </div>
-      </template>
-    </ion-content>
+    </ion-footer>
   </ion-page>
 </template>
 
@@ -108,6 +111,7 @@ import {
   IonButtons,
   IonContent,
   IonHeader,
+  IonFooter,
   IonIcon,
   IonPage,
   IonTitle,
@@ -432,4 +436,42 @@ function onBack() {
 }
 .confirm-brand { display: flex; align-items: center; gap: 8px; font-size: 16px; }
 .confirm-brand img { width: 28px; height: 32px; object-fit: contain; }
+</style>
+
+<style scoped>
+/* Keep the primary action visible inside Ionic's safe-area-aware page layout. */
+.confirm-footer { background: #f3f7fb; padding-bottom: env(safe-area-inset-bottom, 0px); box-shadow: 0 -4px 18px #102e5208; }
+.confirm-footer .actions { margin: 8px 16px; gap: 6px; grid-template-columns: 1fr 1fr; }
+.confirm-footer .actions .start { grid-column: 1 / -1; grid-row: 1; }
+.confirm-footer .actions ion-button { margin: 0; height: 40px; font-size: 13px; --border-radius: 12px; --color: #1d4ed8; }
+.confirm-footer .actions .start { --color: #fff; }
+.gallery { margin: 8px 12px 0; gap: 8px; }
+.photo img, .placeholder { height: clamp(60px, 13dvh, 110px); max-height: 110px; aspect-ratio: auto; border-radius: 14px; }
+.photo figcaption { margin: 3px 4px; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.placeholder { gap: 3px; font-size: 12px; }
+.placeholder ion-icon { font-size: 26px; }
+.card { margin: 8px 12px; padding: 12px; border-radius: 18px; }
+.eyebrow { margin-bottom: 6px; font-size: 12px; }
+.identity { gap: 10px; padding-bottom: 8px; }
+.identity > div { min-width: 0; }
+.card h1 { font-size: 20px; overflow-wrap: anywhere; line-height: 1.15; }
+.dest-icon { width: 38px; height: 38px; font-size: 22px; }
+.building { font-size: 12px; }
+.facts { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px 12px; margin-top: 8px; }
+.facts li { grid-template-columns: 24px minmax(0, 1fr); gap: 1px 6px; }
+.facts li:first-child { grid-column: 1 / -1; grid-template-columns: 24px 54px minmax(0, 1fr); }
+.fact-icon { width: 24px; height: 24px; font-size: 15px; grid-row: 1 / 3; }
+.fact-label { font-size: 11px; }
+.fact-value { grid-column: 2; font-size: 12px; line-height: 1.25; overflow-wrap: anywhere; }
+.facts li:first-child .fact-value { grid-column: 3; }
+.description { margin: 8px 0 0; font-size: 12px; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.source { margin-top: 8px; padding-top: 6px; gap: 6px; font-size: 11px; }
+.source ion-icon { font-size: 14px; }
+@media (max-height: 650px) {
+  .photo img, .placeholder { height: 56px; }
+  .photo figcaption { display: none; }
+  .card { padding: 10px; }
+  .facts { gap: 5px 10px; }
+  .confirm-footer .actions ion-button { height: 36px; }
+}
 </style>

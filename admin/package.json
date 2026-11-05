@@ -13,6 +13,7 @@
     "android:sync": "npm run build && cap sync android",
     "android:open": "cap open android",
     "android:run": "npm run android:sync && cap run android",
+    "phone": "powershell -NoProfile -ExecutionPolicy Bypass -File ../scripts/install-android.ps1",
     "live-check": "node --env-file=.env --env-file-if-exists=.env.test.local scripts/live-check.mjs"
   },
   "dependencies": {

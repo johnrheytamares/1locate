@@ -85,7 +85,7 @@
               <span>
                 <ion-icon :icon="chevronForward" aria-hidden="true" />
                 <ion-icon :icon="chevronForward" aria-hidden="true" />
-                {{ indoorRouteMeters(destination) }} m indoors
+                {{ Number(indoorRouteMeters(destination).toFixed(1)) }} m indoors
               </span>
             </p>
           </div>

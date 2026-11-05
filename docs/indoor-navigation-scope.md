@@ -9,7 +9,9 @@ distances). Guidance follows that list from the destination's designated buildin
 2. The app asks "Are you at <entrance>?". The indoor route starts only after the user taps
    **Start indoor route**.
 3. The route does not move until the user points the phone along the path and taps **Set Forward**.
-4. Progress then follows the route steps. Turns complete when the phone faces the turn direction.
+4. Progress then follows the route steps. Facing the turn direction accepts the turn without
+   adding distance; the turn step is then walked. Arrival is estimated from steps, so the app
+   asks the user to look for the room sign.
 
 ## What it cannot do
 
