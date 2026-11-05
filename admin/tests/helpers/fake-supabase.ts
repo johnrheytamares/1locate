@@ -43,6 +43,7 @@ export function fakeClient(handler: QueryHandler, storage: StorageHandlers = {},
       eq(column: string, value: unknown) { call.filters.push([column, value]); return builder; },
       order() { return builder; },
       limit() { return builder; },
+      range() { return builder; },
       maybeSingle() { call.single = true; return builder; },
       then<T>(resolve: (value: { data: unknown; error: unknown; count: number | null }) => T, reject?: (reason: unknown) => T) {
         return Promise.resolve(handler(call))

@@ -40,6 +40,7 @@ const UNIQUE_MESSAGES: Record<string, string> = {
   floors_building_level_key: 'This building already has a floor with that level.',
   rooms_building_room_number_key: 'Another room in this building already uses that room number.',
   destinations_room_id_key: 'That room is already linked to another destination.',
+  navigation_feedback_session_id_key: 'Feedback for this navigation session was already submitted.',
   user_roles_pkey: 'This user already has a role. Change the existing role instead.',
   building_images_storage_path_key: 'This photo is already saved.',
   room_images_storage_path_key: 'This photo is already saved.',

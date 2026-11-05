@@ -34,6 +34,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'indoor-maps', name: 'indoor-maps', component: () => import('@/views/IndoorMapsView.vue'), meta: { requires: 'content' } },
       { path: 'rooms', name: 'rooms', component: () => import('@/views/RoomsView.vue'), meta: { requires: 'content' } },
       { path: 'destinations', name: 'destinations', component: () => import('@/views/DestinationsView.vue'), meta: { requires: 'content' } },
+      { path: 'navigation-feedback', name: 'feedback', component: () => import('@/views/FeedbackView.vue'), meta: { requires: 'content' } },
       { path: 'roles', name: 'roles', component: () => import('@/views/RolesView.vue'), meta: { requires: 'admin' } },
     ],
   },

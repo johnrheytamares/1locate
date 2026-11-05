@@ -82,11 +82,13 @@ const icons: Record<string, string> = {
   floors: '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M4 5h16v3H4V5zm0 5.5h16v3H4v-3zM4 16h16v3H4v-3z"/></svg>',
   rooms: '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M3 11 12 4l9 7v9h-6v-6H9v6H3v-9z"/></svg>',
   destinations: '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 14.5 9 2.5 2.5 0 0 1 12 11.5z"/></svg>',
+  feedback: '<svg viewBox="0 0 24 24"><path fill="currentColor" d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9L12 3z"/></svg>',
   roles: '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4zm-7 8v-1c0-2.8 3.1-4.5 7-4.5s7 1.7 7 4.5v1H5z"/></svg>',
 };
 
 const items = computed(() => [
   { name: 'dashboard', label: 'Dashboard', group: 'Main' },
+  { name: 'feedback', label: 'Navigation Feedback', group: 'Main' },
   { name: 'buildings', label: 'Buildings', group: 'Campus Management' },
   { name: 'floors', label: 'Floors', group: 'Campus Management' },
   { name: 'indoor-maps', label: 'Indoor Maps & Routes', group: 'Campus Management' },
