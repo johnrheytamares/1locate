@@ -105,3 +105,14 @@ export interface UserRoleRecord {
   created_at: string;
   updated_at: string;
 }
+
+export interface NavigationFeedback {
+  id: string;
+  session_id: string;
+  user_id: string | null;
+  destination_id: string | null;
+  destination_name: string;
+  rating: number;
+  comment: string | null;
+  created_at: string;
+}

@@ -402,6 +402,41 @@ describe('Camera Navigation distance', () => {
     expect(getArrival()).toBeNull();
   });
 
+  test('the feedback popup appears once, only after the arrival message is dismissed', async () => {
+    await enterIndoorDev();
+    const feedback = () => wrapper!.find('[data-test="arrival-feedback"]');
+    for (let index = 0; index < 3; index += 1) await moveForwardButton().trigger('click');
+    expect(feedback().exists()).toBe(false);
+    mocks.heading?.(180);
+    await flushPromises();
+    await new Promise((resolve) => setTimeout(resolve, TURN_ALIGNMENT_HOLD_MS + 100));
+    for (let index = 0; index < 4; index += 1) await moveForwardButton().trigger('click');
+    await flushPromises();
+
+    expect(feedback().exists()).toBe(false);
+    const arrival = wrapper!.findAllComponents(IonAlert).find((alert) => alert.props('header') === 'Estimated route complete')!;
+    arrival.vm.$emit('didDismiss', new CustomEvent('ionAlertDidDismiss', { detail: { role: 'confirm' } }));
+    await flushPromises();
+    expect(feedback().exists()).toBe(true);
+    expect(mocks.replace).not.toHaveBeenCalledWith('/destinations');
+
+    await wrapper!.find('[data-test="maybe-later"]').trigger('click');
+    await flushPromises();
+    expect(feedback().exists()).toBe(false);
+    expect(mocks.replace).toHaveBeenCalledWith('/destinations');
+
+    arrival.vm.$emit('didDismiss', new CustomEvent('ionAlertDidDismiss', { detail: { role: 'confirm' } }));
+    await flushPromises();
+    expect(feedback().exists()).toBe(false);
+  });
+
+  test('no feedback popup while still navigating or after leaving early', async () => {
+    await enterIndoorDev();
+    for (let index = 0; index < 3; index += 1) await moveForwardButton().trigger('click');
+    await flushPromises();
+    expect(wrapper!.find('[data-test="arrival-feedback"]').exists()).toBe(false);
+  });
+
   test('the debug panel shows walking diagnostics from motion samples during development', async () => {
     vi.stubGlobal('DeviceMotionEvent', class {});
     await enterIndoorDev();

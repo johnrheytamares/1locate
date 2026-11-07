@@ -37,6 +37,14 @@
           </template>
           <ion-button expand="block" fill="clear" @click="stopGuidance">Choose another route</ion-button>
         </section>
+        <ArrivalFeedbackModal
+          :is-open="showFeedback"
+          :session-id="feedbackSessionId"
+          :destination-id="feedbackDestinationId"
+          :destination-name="nodeName(goalId)"
+          @close="closeFeedback"
+        />
+        <p v-if="feedbackNotice" class="message ok" role="status" data-test="feedback-notice">{{ feedbackNotice }}</p>
         <section v-if="graph.nodes.length" class="panel">
           <label>View floor<select v-model="mapId" @change="showMap"><option v-for="m in buildingMaps" :key="m.id" :value="m.id">{{ floorName(m.floor_id) }}</option></select></label>
           <FloorMapCanvas v-if="currentMap && url" :url="url" :width="currentMap.width_px" :height="currentMap.height_px" :nodes="graph.nodes.filter(n => n.map_id === mapId)" :edges="graph.edges" :highlight="highlightEdges" :selected="currentLeg?.from.id" @node="inspectNode" />
@@ -48,10 +56,12 @@
   </ion-page>
 </template>
 <script setup lang="ts">
-import { computed, ref, watch, onMounted, onBeforeUnmount } from 'vue';
+import { computed, nextTick, ref, watch, onMounted, onBeforeUnmount } from 'vue';
 import { useRoute, onBeforeRouteLeave } from 'vue-router';
 import { IonPage, IonHeader, IonToolbar, IonButtons, IonBackButton, IonTitle, IonContent, IonButton, useIonRouter, onIonViewWillEnter, onIonViewWillLeave } from '@ionic/vue';
 import FloorMapCanvas from '../../shared/FloorMapCanvas.vue';
+import ArrivalFeedbackModal from '@/components/navigation/ArrivalFeedbackModal.vue';
+import { useArrivalFeedback } from '@/composables/useArrivalFeedback';
 import { emptyGraph, shortestPath, legInstruction, routeInstruction, type GraphPath } from '../../shared/indoor-graph';
 import { getSelectedDestination } from '@/services/navigation.service';
 import { confirmRoomArrival, isTestJourney } from '@/services/journey.service';
@@ -73,6 +83,23 @@ const currentInstruction = computed(() => {
   return routeInstruction(activePath.value, legIndex.value, floorName(currentLeg.value.to.floor_id), m?.width_px ?? 1, m?.height_px ?? 1);
 });
 const arrived = computed(() => !!activePath.value && legIndex.value >= activePath.value.legs.length);
+const {
+  showFeedback,
+  sessionId: feedbackSessionId,
+  notice: feedbackNotice,
+  beginSession: beginFeedbackSession,
+  offerAfterArrival,
+  closeFeedback,
+} = useArrivalFeedback();
+const feedbackDestinationId = computed(() => {
+  const node = graph.value.nodes.find((item) => item.id === goalId.value);
+  return node?.room_id ?? goalId.value ?? null;
+});
+watch(arrived, (isArrived, wasArrived) => {
+  if (isArrived && !wasArrived && activePath.value) {
+    void nextTick(() => offerAfterArrival());
+  }
+});
 const highlightEdges = computed(() => activePath.value ? currentLeg.value ? [currentLeg.value.edge.id] : [] : preview.value?.legs.map(l => l.edge.id) ?? []);
 function floorName(id: string) { return data.value?.floors.find(f => f.id === id)?.name ?? 'the indicated floor'; }
 function nodeName(id: string) { return graph.value.nodes.find(n => n.id === id)?.name ?? 'the selected entrance'; }
@@ -92,7 +119,14 @@ async function load() {
 function resetSelections() { startId.value = ''; goalId.value = ''; preview.value = null; entranceConfirmed.value = false; inspected.value = ''; mapId.value = buildingMaps.value[0]?.id ?? ''; void showMap(); }
 async function showMap() { const request = ++imageRequest; url.value = ''; if (currentMap.value) try { const signed = await signedMapUrl(currentMap.value.storage_path); if (request === imageRequest) url.value = signed; } catch { error.value = 'The floor plan could not be loaded. Refresh campus maps before starting a route.'; } }
 function plan() { error.value = ''; entranceConfirmed.value = false; try { preview.value = shortestPath(graph.value, startId.value, goalId.value, stepFree.value); if (!preview.value) error.value = 'No connected route for this preference. Try another entrance or contact campus staff.'; else { mapId.value = graph.value.nodes.find(n => n.id === startId.value)!.map_id; void showMap(); } } catch (err) { error.value = (err as Error).message; } }
-function begin() { if (!preview.value || !entranceConfirmed.value) return; activePath.value = preview.value; legIndex.value = 0; paused.value = false; facingConfirmed.value = false; }
+function begin() {
+  if (!preview.value || !entranceConfirmed.value) return;
+  beginFeedbackSession();
+  activePath.value = preview.value;
+  legIndex.value = 0;
+  paused.value = false;
+  facingConfirmed.value = false;
+}
 function advance() {
   if (paused.value || !facingConfirmed.value || !currentLeg.value) return;
   legIndex.value++; facingConfirmed.value = false;
@@ -106,8 +140,24 @@ function advance() {
   const nextMap = currentLeg.value?.from.map_id ?? graph.value.nodes.find(n => n.id === goalId.value)?.map_id;
   if (nextMap && nextMap !== mapId.value) { mapId.value = nextMap; void showMap(); }
 }
-function restart() { if (window.confirm(`Have you physically returned to ${nodeName(startId.value)}?`)) { legIndex.value = 0; paused.value = false; facingConfirmed.value = false; mapId.value = graph.value.nodes.find(n => n.id === startId.value)!.map_id; void showMap(); } }
-function stopGuidance() { activePath.value = null; preview.value = null; entranceConfirmed.value = false; facingConfirmed.value = false; legIndex.value = 0; }
+function restart() {
+  if (window.confirm(`Have you physically returned to ${nodeName(startId.value)}?`)) {
+    beginFeedbackSession();
+    legIndex.value = 0;
+    paused.value = false;
+    facingConfirmed.value = false;
+    mapId.value = graph.value.nodes.find(n => n.id === startId.value)!.map_id;
+    void showMap();
+  }
+}
+function stopGuidance() {
+  showFeedback.value = false;
+  activePath.value = null;
+  preview.value = null;
+  entranceConfirmed.value = false;
+  facingConfirmed.value = false;
+  legIndex.value = 0;
+}
 watch([buildingId,startId,goalId,stepFree], () => { preview.value = null; entranceConfirmed.value = false; });
 onIonViewWillEnter(() => { if (!activePath.value) void load(); });
 onIonViewWillLeave(() => { loadRequest++; imageRequest++; if (activePath.value) paused.value = true; });
@@ -126,6 +176,7 @@ main { max-width: 760px; padding: 12px; margin: auto; }
 h1 { font-size: 19px; font-weight: 750; margin: 0 0 8px; }
 h2 { font-size: 17px; line-height: 1.5; margin: 10px 0; }
 p, li { font-size: 12px; line-height: 1.6; color: #607891; }
+.message.ok { color: #15803d; }
 label { display: grid; gap: 7px; font-size: 12px; font-weight: 600; margin: 12px 0; }
 select { width: 100%; min-height: 44px; font-size: 16px; border: 1px solid #cbd9ec; border-radius: 9px; padding: 8px; background: white; color: #173452; }
 fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }

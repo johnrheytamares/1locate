@@ -263,8 +263,7 @@
           <div v-else class="debug-actions">
             <ion-button data-test="move-forward" @click="onMoveForward">Move Forward</ion-button>
             <ion-button @click="onNext">Next Step</ion-button>
-            <ion-button @click="onTurnRight">Turn Right</ion-button>
-            <ion-button class="reset" @click="onReset">
+            <ion-button @click="onTurnRight">Turn Right</ion-button>            <ion-button class="reset" @click="onReset">
               <ion-icon slot="start" :icon="refreshOutline" aria-hidden="true" />
               Reset
             </ion-button>
@@ -298,6 +297,14 @@
       :buttons="[{ text: 'Not yet', role: 'cancel' }, { text: simulationUsed ? 'End test' : 'I am at the room', role: 'confirm' }]"
       @didDismiss="onArrivalDismiss"
     />
+
+    <ArrivalFeedbackModal
+      :is-open="showFeedback"
+      :session-id="feedbackSessionId"
+      :destination-id="destination?.id ?? null"
+      :destination-name="destinationName"
+      @close="onFeedbackClose"
+    />
   </ion-page>
 </template>
 
@@ -316,6 +323,7 @@ import {
   IonToolbar,
   onIonViewDidEnter,
   onIonViewWillLeave,
+  toastController,
   useIonRouter,
 } from '@ionic/vue';
 import { App } from '@capacitor/app';
@@ -339,9 +347,11 @@ import {
   volumeMuteOutline,
   walkOutline,
 } from 'ionicons/icons';
+import ArrivalFeedbackModal from '@/components/navigation/ArrivalFeedbackModal.vue';
 import NavigationOverlay from '@/components/navigation/NavigationOverlay.vue';
 import DestinationMapPreview from '@/components/DestinationMapPreview.vue';
 import { confirmRoomArrival, markTestJourney, clearJourney } from '@/services/journey.service';
+import { useArrivalFeedback } from '@/composables/useArrivalFeedback';
 import { LOCATION_RATIONALE, useOutdoorGps } from '@/composables/useOutdoorGps';
 import { useIndoorWalking } from '@/composables/useIndoorWalking';
 import { useVoice } from '@/composables/useVoice';
@@ -430,6 +440,13 @@ const walkingUnavailable = computed(() => !walkingEnabled.value && /unavailable|
 const appActive = ref(true);
 
 const showArrival = ref(false);
+const {
+  showFeedback,
+  sessionId: feedbackSessionId,
+  beginSession: beginFeedbackSession,
+  offerAfterArrival,
+  closeFeedback,
+} = useArrivalFeedback();
 const showEntrance = ref(false);
 const pageOpen = ref(false);
 const turnAlignment = ref('not a turn');
@@ -881,6 +898,7 @@ function onRestartConfirmed() {
   clearAlignTimer();
   confirmingRestart.value = false;
   showArrival.value = false;
+  beginFeedbackSession();
   turnAlignment.value = 'not a turn';
   navigation.value = restartFromEntrance(navigation.value, true);
   initializeForward();
@@ -895,6 +913,7 @@ function chooseAnotherDestination() {
   confirmingRestart.value = false;
   showEntrance.value = false;
   showArrival.value = false;
+  showFeedback.value = false;
   turnAlignment.value = 'not a turn';
   navigation.value = resetNavigation(navigation.value);
   stage.value = 'outdoor';
@@ -915,7 +934,6 @@ function onTurnRight() {
   simulationUsed.value = true; markTestJourney();
   navigation.value = jumpToRightTurn(navigation.value);
 }
-
 /** Capture the initial phone direction once; subsequent readings guide turns. */
 function initializeForward() {
   if (stage.value !== 'indoor' || navigation.value.paused || heading.value == null
@@ -955,6 +973,7 @@ function onReset() {
   clearAlignTimer();
   navigation.value = resetNavigation(navigation.value);
   showArrival.value = false;
+  beginFeedbackSession();
   turnAlignment.value = 'not a turn';
 }
 
@@ -973,6 +992,7 @@ function formatCoordinate(value: number | null | undefined): string {
   return value == null ? 'unavailable' : value.toFixed(6);
 }
 
+<<<<<<< HEAD
 async function onArrivalDismiss(event: CustomEvent<{ role?: string }>) {
   showArrival.value = false;
   if (event.detail.role !== 'confirm' || !destination.value || !arrived.value) return;
@@ -985,6 +1005,26 @@ async function onArrivalDismiss(event: CustomEvent<{ role?: string }>) {
 function endSession() {
   navigationSession += 1;
   showCheckpoint.value = false;
+=======
+function onArrivalDismiss() {
+  showArrival.value = false;
+  offerAfterArrival();
+}
+
+function onFeedbackClose(message?: string) {
+  closeFeedback();
+  if (message) {
+    void toastController
+      .create({ message, duration: 2500, position: 'top', color: 'success' })
+      .then((toast) => toast.present())
+      .catch(() => undefined);
+  }
+  ionRouter.replace('/destinations');
+}
+
+function endSession() {
+  showFeedback.value = false;
+>>>>>>> 7267a076da2c2f207f4efc0a584e12cde74b804e
   walking.stop();
   clearAlignTimer();
   resetVoice();
@@ -1009,6 +1049,7 @@ onIonViewDidEnter(async () => {
   destination.value = selected;
   navigation.value = indoor;
   stage.value = 'outdoor';
+  beginFeedbackSession();
   showArrival.value = false;
   showEntrance.value = false;
   turnAlignment.value = 'not a turn';
