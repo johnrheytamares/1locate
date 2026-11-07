@@ -58,7 +58,7 @@ const roomDestination: Destination = {
 
 async function mountPage(id: string) {
   mocks.routeId = id;
-  const wrapper = mount(ConfirmDestinationPage, { global: { stubs: { IonBackButton: true } } });
+  const wrapper = mount(ConfirmDestinationPage, { global: { stubs: { IonBackButton: true, DestinationMapPreview: true } } });
   await flushPromises();
   return wrapper;
 }
@@ -100,12 +100,12 @@ describe('Confirm Destination screen', () => {
     expect(getSelectedDestination()).toBeNull();
   });
 
-  test('Start Navigation selects the destination and opens the camera guide', async () => {
+  test('View on Map opens the mandatory map preview without selecting a navigation session', async () => {
     const wrapper = await mountPage('registrar');
     await wrapper.find('[data-test="start"]').trigger('click');
-    expect(getSelectedDestination()?.id).toBe('registrar');
-    expect(getSelectedDestination()?.details?.roomNumber).toBe('A-101');
-    expect(mocks.push).toHaveBeenCalledWith('/ar-navigation');
+    await flushPromises();
+    expect(getSelectedDestination()).toBeNull();
+    expect(mocks.push).toHaveBeenCalledWith('/destinations/registrar/preview');
   });
 
   test('shows a placeholder and hides empty fields for a destination without details', async () => {

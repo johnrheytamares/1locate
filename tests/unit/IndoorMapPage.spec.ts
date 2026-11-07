@@ -3,6 +3,7 @@ import { flushPromises, mount } from '@vue/test-utils';
 
 const hooks = vi.hoisted(() => ({ enter: [] as (() => void)[], leave: [] as (() => void)[], load: vi.fn() }));
 vi.mock('@ionic/vue', () => ({
+  useIonRouter: () => ({ replace: vi.fn() }),
   IonPage: { template: '<div><slot /></div>' }, IonHeader: { template: '<header><slot /></header>' },
   IonToolbar: { template: '<div><slot /></div>' }, IonButtons: { template: '<div><slot /></div>' },
   IonBackButton: { template: '<span />' }, IonTitle: { template: '<div><slot /></div>' },

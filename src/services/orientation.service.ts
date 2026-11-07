@@ -37,6 +37,7 @@ interface OrientationWithPermission {
  * A missing sensor leaves navigation usable and reports null.
  */
 export function watchHeading(listener: HeadingListener): () => void {
+  if (typeof DeviceOrientationEvent === 'undefined') { listener(null); return () => {}; }
   let active = true;
   let received = false;
   let smoothed: number | null = null;

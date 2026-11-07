@@ -1,0 +1,180 @@
+<template>
+  <section class="map-preview" :class="{ fullscreen }" aria-label="Satellite destination preview">
+    <div class="map-heading"><strong>Destination preview</strong><button :disabled="!mapReady" @click="recenter">Recenter</button></div>
+    <div ref="container" class="map-canvas" aria-label="Satellite map with your location and building entrance" />
+    <p class="legend"><span class="user-dot">●</span> Your location <span class="entrance-dot">●</span> Building entrance</p>
+    <p v-if="mapMessage" role="status">{{ mapMessage }}</p>
+    <p role="status">{{ locationMessage }}</p>
+    <p v-if="!target">Entrance coordinates are not set. Ask the campus administrator to verify this entrance.</p>
+    <p v-if="fix">GPS accuracy: ±{{ Math.round(fix.accuracy) }} m. The pin is an estimate.</p>
+    <div class="map-actions"><button v-if="mapMessage" @click="retryMap">Retry map</button><button @click="locate">Update my location</button></div>
+    <p class="map-note">Outdoor entrance preview. Indoor guidance starts after entrance confirmation.</p>
+  </section>
+</template>
+
+<script setup lang="ts">
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { Geolocation } from '@capacitor/geolocation';
+import { App } from '@capacitor/app';
+import type { PluginListenerHandle } from '@capacitor/core';
+import type { Map as MapInstance, Marker, GeoJSONSource } from 'maplibre-gl';
+import type { OutdoorTarget } from '@/models/navigation';
+import type { UserLocation } from '@/models/location';
+import { checkPermission, requestPermission, toLocationError, toUserLocation } from '@/services/location.service';
+import { destinationPoint } from '@/services/geo.service';
+import { surveyedTarget } from '@/services/outdoor-navigation.service';
+import 'maplibre-gl/dist/maplibre-gl.css';
+
+const props = defineProps<{ entrance: OutdoorTarget; fullscreen?: boolean }>();
+const emit = defineEmits<{ location: [value: UserLocation] }>();
+const target = computed(() => surveyedTarget(props.entrance));
+const container = ref<HTMLDivElement>();
+const fix = ref<UserLocation | null>(null);
+const mapReady = ref(false);
+const mapMessage = ref('');
+const locationMessage = ref('Getting your location…');
+let map: MapInstance | undefined;
+let userMarker: Marker | undefined;
+let library: typeof import('maplibre-gl') | undefined;
+let watchId: string | undefined;
+let generation = 0;
+let disposed = false;
+let fittedUser = false;
+let appHandle: PluginListenerHandle | undefined;
+let resize: ResizeObserver | undefined;
+
+function recenter() {
+  if (!map) return;
+  const points: [number, number][] = [];
+  if (target.value) points.push([target.value.longitude, target.value.latitude]);
+  if (fix.value) points.push([fix.value.longitude, fix.value.latitude]);
+  if (points.length === 1) map.jumpTo({ center: points[0], zoom: 17 });
+  if (points.length === 2) map.fitBounds([points[0], points[1]], { padding: 65, maxZoom: 18, duration: 0 });
+}
+
+function renderLocation() {
+  if (!map || !library || !fix.value) return;
+  const position: [number, number] = [fix.value.longitude, fix.value.latitude];
+  if (!userMarker) {
+    userMarker = new library.Marker({ color: '#2563eb' })
+      .setPopup(new library.Popup().setText('Your estimated location'));
+  }
+  userMarker.setLngLat(position).addTo(map);
+  if (mapReady.value) {
+    const location = fix.value;
+    const coordinates = Array.from({ length: 64 }, (_, index) => {
+      const point = destinationPoint(location.latitude, location.longitude, index * 360 / 64, location.accuracy);
+      return [point.longitude, point.latitude];
+    });
+    coordinates.push(coordinates[0]);
+    const data: GeoJSON.Feature<GeoJSON.Polygon> = { type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [coordinates] } };
+    const source = map.getSource('gps-accuracy') as GeoJSONSource | undefined;
+    if (source) source.setData(data);
+    else {
+      map.addSource('gps-accuracy', { type: 'geojson', data });
+      map.addLayer({ id: 'gps-accuracy', type: 'fill', source: 'gps-accuracy', paint: { 'fill-color': '#3b82f6', 'fill-opacity': 0.18 } });
+    }
+  }
+  if (!fittedUser && fix.value.accuracy <= 50) { recenter(); fittedUser = true; }
+}
+
+async function stopLocation() {
+  generation += 1;
+  const id = watchId;
+  watchId = undefined;
+  if (id) await Geolocation.clearWatch({ id }).catch(() => {});
+}
+
+async function locate() {
+  await stopLocation();
+  const session = generation;
+  if (disposed) return;
+  locationMessage.value = 'Getting your location…';
+  try {
+    let permission = await checkPermission();
+    if (session !== generation || disposed) return;
+    if (permission.state !== 'granted') permission = await requestPermission();
+    if (session !== generation || disposed) return;
+    if (permission.state !== 'granted') { locationMessage.value = 'Allow location permission to show your pin.'; return; }
+    const id = await Geolocation.watchPosition({ enableHighAccuracy: true, timeout: 20000, maximumAge: 0, minimumUpdateInterval: 3000 }, (position, error) => {
+      if (disposed || session !== generation) return;
+      if (error) { locationMessage.value = toLocationError(error).message; return; }
+      const next = toUserLocation(position);
+      if (!next || Date.now() - next.timestamp > 30000) return;
+      fix.value = next;
+      emit('location', next);
+      locationMessage.value = permission.precise ? 'Your location is updating.' : 'Approximate location only. Enable precise location for a better pin.';
+      renderLocation();
+    });
+    if (disposed || session !== generation) await Geolocation.clearWatch({ id }).catch(() => {});
+    else watchId = id;
+  } catch (error) {
+    if (!disposed && session === generation) locationMessage.value = toLocationError(error).message;
+  }
+}
+
+async function retryMap() {
+  map?.remove(); map = undefined; userMarker = undefined; mapReady.value = false; fittedUser = false;
+  const key = String(import.meta.env.VITE_MAPTILER_API_KEY ?? '').trim();
+  if (!key) { mapMessage.value = 'Satellite map is not configured yet.'; return; }
+  mapMessage.value = 'Loading satellite map…';
+  try {
+    const [module, worker] = await Promise.all([import('maplibre-gl'), import('maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url')]);
+    if (disposed || !container.value) return;
+    library = module;
+    module.setWorkerUrl(worker.default);
+    const center: [number, number] = target.value ? [target.value.longitude, target.value.latitude] : fix.value ? [fix.value.longitude, fix.value.latitude] : [0, 0];
+    map = new module.Map({ container: container.value, style: `https://api.maptiler.com/maps/hybrid-v4/style.json?key=${encodeURIComponent(key)}`, center, zoom: target.value || fix.value ? 17 : 1, attributionControl: { compact: false } });
+    map.addControl(new module.NavigationControl({ showCompass: true }), 'top-right');
+    map.addControl({
+      onAdd() {
+        const link = document.createElement('a');
+        link.className = 'maplibregl-ctrl'; link.href = 'https://www.maptiler.com/';
+        link.target = '_blank'; link.rel = 'noopener noreferrer';
+        const logo = document.createElement('img');
+        logo.src = 'https://api.maptiler.com/resources/logo.svg'; logo.alt = 'MapTiler'; logo.width = 90;
+        link.append(logo); return link;
+      },
+      onRemove() {},
+    }, 'bottom-left');
+    if (target.value) new module.Marker({ color: '#e34935' }).setLngLat([target.value.longitude, target.value.latitude]).setPopup(new module.Popup().setText(props.entrance.name)).addTo(map);
+    map.on('load', () => { mapReady.value = true; mapMessage.value = ''; renderLocation(); });
+    map.on('error', () => { mapMessage.value = 'Some map imagery could not load. Check your connection or map access, then retry.'; });
+    renderLocation();
+  } catch {
+    mapMessage.value = 'Satellite map could not start on this device. You can still start navigation.';
+  }
+}
+
+onMounted(() => {
+  void retryMap(); void locate();
+  resize = new ResizeObserver(() => map?.resize());
+  if (container.value) resize.observe(container.value);
+  void App.addListener('appStateChange', ({ isActive }) => {
+    if (isActive) { fix.value = null; fittedUser = false; userMarker?.remove(); userMarker = undefined; void locate(); }
+    else { void stopLocation(); locationMessage.value = 'Location paused while app is in the background.'; }
+  }).then(handle => { if (disposed) void handle.remove(); else appHandle = handle; });
+});
+onBeforeUnmount(() => { disposed = true; void stopLocation(); void appHandle?.remove(); resize?.disconnect(); map?.remove(); });
+defineExpose({ stopLocation });
+</script>
+
+<style scoped>
+.map-preview { margin: 10px 12px; border-radius: 18px; overflow: hidden; background: white; color: #24435e; box-shadow: 0 8px 24px #102e5210; }
+.map-heading { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; }
+button { border-radius: 9px; padding: 9px 12px; background: #e8f1fb; color: #1d4ed8; font-weight: 600; }
+button:disabled { opacity: .5; }
+.map-canvas { height: clamp(250px, 38dvh, 420px); width: 100%; background: #dce5ed; }
+p { margin: 8px 12px; font-size: 12px; line-height: 1.4; }
+.legend { display: flex; align-items: center; gap: 7px; }
+.user-dot { color: #2563eb; }.entrance-dot { color: #e34935; margin-left: 9px; }
+.map-actions { display: flex; gap: 8px; padding: 0 12px; }
+.map-note { padding-bottom: 10px; color: #60788e; }
+.map-canvas :deep(.maplibregl-ctrl-attrib) { font-size: 9px; }
+.fullscreen { margin: 0; height: 100%; border-radius: 0; display: flex; flex-direction: column; }
+.fullscreen .map-canvas { flex: 1; min-height: 180px; height: auto; }
+.fullscreen p { margin: 3px 12px; font-size: 11px; }
+.fullscreen .map-note { display: none; }
+.fullscreen .map-heading { padding: 6px 12px; }
+.fullscreen .map-actions { padding: 3px 12px; }
+</style>

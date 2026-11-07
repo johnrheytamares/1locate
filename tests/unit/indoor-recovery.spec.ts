@@ -12,6 +12,8 @@ const mocks = vi.hoisted(() => ({
   gpsSource: 'simulated' as 'simulated' | 'real',
 }));
 
+vi.mock('@/components/DestinationMapPreview.vue', () => ({ default: { template: '<div>Outdoor map reference</div>' } }));
+
 vi.mock('@/config/dev-tools', () => ({
   get SHOW_DEV_TOOLS() {
     return mocks.devTools;
@@ -389,10 +391,15 @@ describe('Camera Navigation distance', () => {
     await new Promise((resolve) => setTimeout(resolve, TURN_ALIGNMENT_HOLD_MS + 100));
     for (let index = 0; index < 4; index += 1) await moveForwardButton().trigger('click');
     await flushPromises();
-    const arrival = wrapper!.findAllComponents(IonAlert).find((alert) => alert.props('isOpen') && alert.props('header') === 'Estimated route complete');
+    const arrival = wrapper!.findAllComponents(IonAlert).find((alert) => alert.props('isOpen') && alert.props('header') === 'TEST route complete');
     expect(arrival).toBeDefined();
     expect(arrival!.props('message')).toContain('cannot confirm you are at the room');
     expect(arrival!.props('message')).not.toMatch(/you have reached/i);
+    arrival!.vm.$emit('didDismiss', new CustomEvent('ionAlertDidDismiss', { detail: { role: 'confirm' } }));
+    await flushPromises();
+    expect(mocks.replace).toHaveBeenCalledWith('/destinations');
+    const { getArrival } = await import('@/services/journey.service');
+    expect(getArrival()).toBeNull();
   });
 
   test('the debug panel shows walking diagnostics from motion samples during development', async () => {
@@ -477,19 +484,33 @@ describe('Camera Navigation in a release build', () => {
     expect(wrapper!.find('[data-test="lost-way"]').exists()).toBe(true);
   });
 
+  test('camera denial keeps preparation incomplete and offers a map fallback', async () => {
+    const { startRearPreview } = await import('@/services/camera.service');
+    vi.mocked(startRearPreview).mockRejectedValueOnce(new Error('Camera permission was denied.'));
+    await mountRelease();
+    expect(wrapper!.text()).toContain('Preparing AR Navigation');
+    expect(wrapper!.text()).toContain('Camera permission was denied.');
+    expect(wrapper!.text()).not.toContain('Camera enabled');
+    const fallback = wrapper!.findAll('ion-button').find(button => button.text() === 'Use Map Navigation');
+    expect(fallback).toBeDefined();
+    await fallback!.trigger('click'); await flushPromises();
+    expect(wrapper!.find('.preparation').exists()).toBe(false);
+    expect(wrapper!.text()).toContain('Outdoor map reference');
+  });
+
   test('starts walking automatically and keeps only guide controls in release', async () => {
     vi.stubGlobal('DeviceMotionEvent', class {});
     await mountRelease();
     const { startRearPreview } = await import('@/services/camera.service');
-    expect(startRearPreview).not.toHaveBeenCalled();
+    expect(startRearPreview).toHaveBeenCalled();
     await wrapper!.find('[data-test="at-entrance"]').trigger('click');
     await flushPromises();
-    expect(startRearPreview).not.toHaveBeenCalled();
+    expect(startRearPreview).toHaveBeenCalled();
     wrapper!.findAllComponents(IonAlert)[0].vm.$emit(
       'didDismiss', new CustomEvent('ionAlertDidDismiss', { detail: { role: 'confirm' } }),
     );
     await flushPromises();
-    expect(startRearPreview).toHaveBeenCalledTimes(1);
+    expect(startRearPreview).toHaveBeenCalled();
     expect(wrapper!.find('[data-test="set-forward"]').exists()).toBe(false);
     expect(wrapper!.find('[data-test="move-forward"]').exists()).toBe(false);
     expect(wrapper!.find('.walking-calibration').exists()).toBe(false);

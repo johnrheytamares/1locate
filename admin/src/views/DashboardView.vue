@@ -8,6 +8,7 @@
       <time class="hello-side">{{ today }}</time>
     </header>
 
+    <NavigationFeedback />
     <p v-if="error" class="notice error" role="alert">{{ error }}</p>
     <p v-if="loading" class="muted">Loading summary...</p>
 
@@ -168,6 +169,7 @@
 </template>
 
 <script setup lang="ts">
+import NavigationFeedback from '@/components/NavigationFeedback.vue';
 import { computed, onMounted, ref } from 'vue';
 import { buildActivity, layoutPins, mapPoints, relativeTime, type ActivityItem, type MapPin } from '@/lib/dashboard';
 import { isVisible, mobileVisibility, roomsWithoutDestination } from '@/lib/destination-links';

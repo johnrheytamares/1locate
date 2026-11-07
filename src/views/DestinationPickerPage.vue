@@ -58,6 +58,7 @@
         </ion-button>
       </div>
 
+      <div class="category-filters" role="group" aria-label="Destination category"><button v-for="item in ['All', 'Buildings', 'Rooms', 'Offices'] as const" :key="item" :aria-pressed="category === item" :class="{ selected: category === item }" @click="category = item">{{ item }}</button></div>
       <p v-if="filtered.length === 0" class="empty">No destinations match that search.</p>
 
       <article v-for="destination in filtered" :key="destination.id" class="card">
@@ -72,7 +73,7 @@
             </div>
             <p class="building">
               <ion-icon :icon="locationOutline" aria-hidden="true" />
-              {{ destination.building }}
+              {{ destination.building }}<template v-if="destination.details?.floorName"> &middot; {{ destination.details.floorName }}</template>
             </p>
             <p class="meta">
               {{ destinationTypeLabel(destination.type) }} · GPS to {{ destination.outdoorTarget.name }}
@@ -141,6 +142,7 @@ import { resolveVoiceSearch } from '@/services/voice-query.service';
 
 const ionRouter = useIonRouter();
 const query = ref('');
+const category = ref<'All' | 'Buildings' | 'Rooms' | 'Offices'>('All');
 const { destinations, failed, loading, isLive, sourceLabel, load } = useDestinationCatalog();
 const voice = useVoice();
 const listening = ref(false);
@@ -190,7 +192,7 @@ async function onVoiceSearch() {
   query.value = '';
   if (result.kind === 'single') {
     voiceMessage.value = `Found ${result.destination.name}.`;
-    voice.announce(`${result.destination.name}. Tap Start Navigation when you are ready.`);
+    voice.announce(`${result.destination.name}. Review its details, then tap View on Map.`);
     onSelect(result.destination.id);
     return;
   }
@@ -212,8 +214,12 @@ const filtered = computed(() => {
     return destinations.value.filter((destination) => ids.includes(destination.id));
   }
   const needle = query.value.trim().toLowerCase();
-  if (!needle) return destinations.value;
-  return destinations.value.filter((destination) => (
+  const available = destinations.value.filter(item => category.value === 'All'
+    || (category.value === 'Rooms' && (!!item.details?.roomId || /room|classroom|laboratory/i.test(item.type)))
+    || (category.value === 'Offices' && /office/i.test(item.type))
+    || (category.value === 'Buildings' && /building/i.test(item.type)));
+  if (!needle) return available;
+  return available.filter((destination) => (
     destination.name.toLowerCase().includes(needle)
     || destination.building.toLowerCase().includes(needle)
     || destination.type.toLowerCase().includes(needle)
@@ -526,3 +532,5 @@ function onSelect(id: string) {
 .header-logo { width: 30px; height: 34px; object-fit: contain; flex-shrink: 0; }
 .map-routes { display: block; margin: 10px 12px; --color: #1d4ed8; --border-color: #c4d7ef; --border-radius: 10px; font-size: 12px; text-transform: none; min-height: 44px; }
 </style>
+
+<style scoped>.category-filters { display: flex; gap: 8px; overflow-x: auto; padding: 8px 16px; }.category-filters button { background: white; color: #25445f; border: 1px solid #d5e2ee; padding: 10px 16px; border-radius: 12px; font-weight: 700; }.category-filters .selected { background: #1d4ed8; color: white; border-color: #1d4ed8; }</style>

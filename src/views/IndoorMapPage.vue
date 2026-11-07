@@ -3,6 +3,7 @@
     <ion-header><ion-toolbar><ion-buttons slot="start"><ion-back-button default-href="/destinations" /></ion-buttons><ion-title><span class="brand"><img src="/images/1locate-logo.png" alt="" />Indoor map route</span></ion-title></ion-toolbar></ion-header>
     <ion-content class="map-content">
       <main>
+        <p v-if="isTestJourney()" class="message">TEST SESSION - not a verified physical journey.</p>
         <p v-if="loading" role="status">Loading published campus maps…</p>
         <div v-if="error" class="message error" role="alert">{{ error }} <ion-button v-if="!data" size="small" @click="load">Retry</ion-button></div>
         <p v-if="data && !data.graphs.length" class="message">No published map routes are available yet. You can still use the existing destination routes.</p>
@@ -49,12 +50,15 @@
 <script setup lang="ts">
 import { computed, ref, watch, onMounted, onBeforeUnmount } from 'vue';
 import { useRoute, onBeforeRouteLeave } from 'vue-router';
-import { IonPage, IonHeader, IonToolbar, IonButtons, IonBackButton, IonTitle, IonContent, IonButton, onIonViewWillEnter, onIonViewWillLeave } from '@ionic/vue';
+import { IonPage, IonHeader, IonToolbar, IonButtons, IonBackButton, IonTitle, IonContent, IonButton, useIonRouter, onIonViewWillEnter, onIonViewWillLeave } from '@ionic/vue';
 import FloorMapCanvas from '../../shared/FloorMapCanvas.vue';
 import { emptyGraph, shortestPath, legInstruction, routeInstruction, type GraphPath } from '../../shared/indoor-graph';
+import { getSelectedDestination } from '@/services/navigation.service';
+import { confirmRoomArrival, isTestJourney } from '@/services/journey.service';
 import { loadIndoorMaps, signedMapUrl } from '@/services/indoor-map.service';
 
 const route = useRoute();
+const router = useIonRouter();
 const data = ref<Awaited<ReturnType<typeof loadIndoorMaps>> | null>(null), error = ref(''), loading = ref(false);
 const buildingId = ref(''), startId = ref(''), goalId = ref(''), stepFree = ref(false), mapId = ref(''), url = ref('');
 const preview = ref<GraphPath | null>(null), activePath = ref<GraphPath | null>(null), entranceConfirmed = ref(false);
@@ -92,6 +96,13 @@ function begin() { if (!preview.value || !entranceConfirmed.value) return; activ
 function advance() {
   if (paused.value || !facingConfirmed.value || !currentLeg.value) return;
   legIndex.value++; facingConfirmed.value = false;
+  const selected = getSelectedDestination();
+  const goalRoom = graph.value.nodes.find(node => node.id === goalId.value)?.room_id;
+  if (arrived.value && selected?.details?.roomId && selected.details.roomId === goalRoom) {
+    confirmRoomArrival(selected);
+    router.replace('/arrival');
+    return;
+  }
   const nextMap = currentLeg.value?.from.map_id ?? graph.value.nodes.find(n => n.id === goalId.value)?.map_id;
   if (nextMap && nextMap !== mapId.value) { mapId.value = nextMap; void showMap(); }
 }

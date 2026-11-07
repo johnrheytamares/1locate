@@ -161,3 +161,17 @@ describe('session store', () => {
     expect(s.state.role).toBeNull();
   });
 });
+
+test('a late role lookup cannot restore a session after recovery sign-out', async () => {
+  let finish!: (value: { data: { role: string }[] }) => void;
+  const role = new Promise<{ data: { role: string }[] }>(resolve => { finish = resolve; });
+  const { auth } = authFake(session());
+  const { client } = fakeClient(() => role, {}, auth);
+  const current = createSessionStore(client);
+  const initializing = current.init();
+  await flush();
+  await current.signOut();
+  finish({ data: [{ role: 'admin' }] });
+  await initializing;
+  expect(current.state).toMatchObject({ status: 'signed-out', userId: null, role: null });
+});

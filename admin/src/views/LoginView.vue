@@ -46,8 +46,10 @@
       <div class="form-actions">
         <button type="submit" :disabled="busy" data-test="sign-in">{{ busy ? 'Signing in...' : 'Sign in' }}</button>
       </div>
+      <RouterLink to="/forgot-password" data-test="forgot-password">Forgot password?</RouterLink>
+      <div class="form-actions"><button type="button" :disabled="busy" data-test="google-sign-in" @click="onGoogle">Continue with Google</button></div>
       <p class="muted" style="margin-top: 12px; font-size: 13px">
-        There is no public sign-up. New accounts are added in Supabase Dashboard → Authentication.
+        Google accounts still need an assigned Admin or Editor role. Accounts are managed in Supabase Dashboard → Authentication.
       </p>
     </form>
   </div>
@@ -55,7 +57,9 @@
 
 <script setup lang="ts">
 import { ref } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
+import { RouterLink, useRoute, useRouter } from 'vue-router';
+import { createAccountAuth } from '@/services/account-auth';
+import { supabase } from '@/lib/supabase';
 import { safeRedirect } from '@/lib/validation';
 import { useSession } from '@/stores/session';
 
@@ -68,6 +72,15 @@ const password = ref('');
 const showPassword = ref(false);
 const error = ref('');
 const busy = ref(false);
+
+async function onGoogle() {
+  error.value = ''; busy.value = true;
+  try {
+    sessionStorage.setItem('1locate-auth-redirect', safeRedirect(route.query.redirect));
+    await createAccountAuth(supabase).google();
+  } catch (err) { error.value = err instanceof Error ? err.message : 'Google sign-in failed.'; }
+  finally { busy.value = false; }
+}
 
 async function onSubmit() {
   error.value = '';

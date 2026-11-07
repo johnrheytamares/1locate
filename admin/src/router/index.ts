@@ -11,6 +11,8 @@ declare module 'vue-router' {
 const ROLE_RECHECK_MS = 60_000;
 
 const routes: RouteRecordRaw[] = [
+  { path: '/auth/callback', name: 'auth-callback', component: () => import('@/views/AuthCallbackView.vue'), meta: { public: true, authFlow: true } },
+  { path: '/forgot-password', name: 'forgot-password', component: () => import('@/views/ForgotPasswordView.vue'), meta: { public: true, authFlow: true } },
   {
     path: '/login',
     name: 'login',

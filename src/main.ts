@@ -41,3 +41,8 @@ const app = createApp(App)
 router.isReady().then(() => {
   app.mount('#app');
 });
+
+// Anonymous ratings explicitly submitted offline are retried without requiring login.
+import { flushFeedback } from '@/services/feedback.service';
+void flushFeedback();
+window.addEventListener('online', () => { void flushFeedback(); });

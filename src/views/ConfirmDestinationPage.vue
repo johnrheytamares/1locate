@@ -5,7 +5,7 @@
         <ion-buttons slot="start">
           <ion-back-button default-href="/destinations" text="" color="dark" />
         </ion-buttons>
-        <ion-title><span class="confirm-brand"><img src="/images/1locate-logo.png" alt="" />Confirm Destination</span></ion-title>
+        <ion-title><span class="confirm-brand"><img src="/images/1locate-logo.png" alt="" />Destination Details</span></ion-title>
       </ion-toolbar>
     </ion-header>
 
@@ -91,7 +91,7 @@
           <ion-button v-if="destination.details?.roomId" expand="block" fill="outline" class="back" :router-link="{ path: '/indoor-map', query: { room: destination.details.roomId } }">Plan a floor-map route</ion-button>
           <ion-button expand="block" class="start" data-test="start" @click="onStart">
             <ion-icon slot="start" :icon="paperPlaneOutline" aria-hidden="true" />
-            Start Navigation
+            View on Map
           </ion-button>
           <ion-button expand="block" fill="outline" class="back" data-test="back" @click="onBack">
             <ion-icon slot="start" :icon="chevronBack" aria-hidden="true" />
@@ -117,6 +117,7 @@ import {
   IonTitle,
   IonToolbar,
   onIonViewWillEnter,
+  onIonViewWillLeave,
   useIonRouter,
 } from '@ionic/vue';
 import {
@@ -138,11 +139,12 @@ import {
   wifi,
 } from 'ionicons/icons';
 import { useDestinationCatalog } from '@/composables/useDestinationCatalog';
+import { reviewDestination } from '@/services/journey.service';
 import type { DisplayImage } from '@/models/campus';
 import type { Destination } from '@/models/navigation';
 import { summarizeDestination } from '@/services/destination-details.service';
 import { getDestinationImageUrls } from '@/services/destination-repository';
-import { getDestination, selectDestination } from '@/services/navigation.service';
+import { getDestination } from '@/services/navigation.service';
 
 const route = useRoute();
 const ionRouter = useIonRouter();
@@ -185,6 +187,9 @@ async function load() {
 onIonViewWillEnter(() => {
   void load();
 });
+onIonViewWillLeave(() => {
+  request += 1;
+});
 
 function iconFor(item: Destination) {
   const key = `${item.id} ${item.name} ${item.type}`.toLowerCase();
@@ -197,11 +202,9 @@ function iconFor(item: Destination) {
 }
 
 function onStart() {
-  if (!destination.value || !selectDestination(destination.value.id)) {
-    state.value = 'missing';
-    return;
-  }
-  ionRouter.push('/ar-navigation');
+  if (!destination.value) return;
+  reviewDestination(destination.value.id);
+  ionRouter.push(`/destinations/${encodeURIComponent(destination.value.id)}/preview`);
 }
 
 function onBack() {

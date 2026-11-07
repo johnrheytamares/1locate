@@ -10,7 +10,7 @@ import { supabase } from '@/services/supabase';
  * supabase-legacy: the original destinations table (migrations not applied yet).
  * local: bundled destinations.
  */
-export type DestinationSource = 'supabase' | 'supabase-legacy' | 'local';
+export type DestinationSource = 'supabase' | 'supabase-legacy' | 'local' | 'cache';
 
 export interface DestinationLoadResult {
   destinations: Destination[];
@@ -177,7 +177,18 @@ export function toCatalogDestination(row: unknown): Destination | null {
   return { ...destination, details };
 }
 
+const CATALOG_CACHE = `1locate-catalog-v1:${import.meta.env.VITE_SUPABASE_URL ?? 'local'}`;
+function cacheRows(rows: unknown[], catalog: boolean) {
+  try { localStorage.setItem(CATALOG_CACHE, JSON.stringify({ rows, catalog })); } catch { /* Storage may be full or unavailable. */ }
+}
 function local(reason: string, failed: boolean): DestinationLoadResult {
+  try {
+    const saved = JSON.parse(localStorage.getItem(CATALOG_CACHE) ?? 'null');
+    if (saved && Array.isArray(saved.rows) && saved.rows.length <= 5000) {
+      const destinations = validated(saved.rows, saved.catalog ? toCatalogDestination : toDestination);
+      if (typeof destinations !== 'string') return { destinations, source: 'cache', failed, reason };
+    }
+  } catch { /* Ignore malformed or inaccessible saved data. */ }
   return { destinations: DESTINATIONS, source: 'local', failed, reason };
 }
 
@@ -219,6 +230,7 @@ export async function fetchDestinations(client: SupabaseClient | null = supabase
     const catalog = await query(client, 'navigation_catalog', CATALOG_COLUMNS);
     if (!catalog.error) {
       const result = validated(catalog.data, toCatalogDestination);
+      if (typeof result !== 'string') cacheRows(catalog.data, true);
       return typeof result === 'string'
         ? local(result, true)
         : { destinations: result, source: 'supabase', failed: false };
@@ -228,6 +240,7 @@ export async function fetchDestinations(client: SupabaseClient | null = supabase
     const legacy = await query(client, 'destinations', LEGACY_COLUMNS);
     if (legacy.error) return local(legacy.error.message, true);
     const result = validated(legacy.data, toDestination);
+    if (typeof result !== 'string') cacheRows(legacy.data, false);
     return typeof result === 'string'
       ? local(result, true)
       : { destinations: result, source: 'supabase-legacy', failed: false };

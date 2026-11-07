@@ -77,7 +77,8 @@ export function createSessionStore(client: SupabaseClient | null, now: () => num
       if (!alreadyLoading) state.role = null;
       await loadRole(session.user.id);
     }
-    state.status = 'signed-in';
+    // A recovery sign-out or another account may have superseded this role lookup.
+    if (state.userId === session.user.id) state.status = 'signed-in';
   }
 
   /** Restores a saved session and follows sign-in, sign-out, and expiry events. */
@@ -110,6 +111,13 @@ export function createSessionStore(client: SupabaseClient | null, now: () => num
     await applySession(data.session);
   }
 
+  async function restore(): Promise<void> {
+    if (!client) return;
+    const { data, error } = await client.auth.getSession();
+    if (error) throw new Error('Could not restore sign-in.');
+    await applySession(data.session);
+  }
+
   async function signOut(): Promise<void> {
     try {
       await client?.auth.signOut();
@@ -139,6 +147,7 @@ export function createSessionStore(client: SupabaseClient | null, now: () => num
     isAdmin: computed(() => state.role === 'admin'),
     init,
     signIn,
+    restore,
     signOut,
     refreshRole,
     refreshRoleIfStale,

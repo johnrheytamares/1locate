@@ -417,3 +417,10 @@ export function restartFromEntrance(state: NavigationSnapshot, confirmedAtEntran
   if (!confirmedAtEntrance) return state;
   return resetNavigation(state);
 }
+
+/** Advances one instruction only after an explicit physical checkpoint confirmation. No heading or GPS is inferred. */
+export function confirmRouteCheckpoint(state: NavigationSnapshot): NavigationSnapshot {
+  if (state.paused || hasArrived(state) || !state.steps.length) return state;
+  const index = currentStepIndex(state);
+  return { ...state, walkedMeters: state.steps.slice(0, index + 1).reduce((sum, step) => sum + step.distance, 0) };
+}

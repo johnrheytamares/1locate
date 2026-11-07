@@ -43,6 +43,7 @@ export const supabase: SupabaseClient | null = supabaseConfigProblem === null
       persistSession: true,
       autoRefreshToken: true,
       detectSessionInUrl: false,
+      flowType: 'pkce',
       storageKey: '1locate-admin-auth',
     },
   })

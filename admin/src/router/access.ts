@@ -6,6 +6,7 @@ export type Requirement = 'content' | 'admin';
 export interface AccessMeta {
   /** Reachable without signing in (login page). */
   public?: boolean;
+  authFlow?: boolean;
   /** Signed in, any role (access-denied page). */
   signedIn?: boolean;
   requires?: Requirement;
@@ -24,6 +25,7 @@ export type AccessDecision =
 export function decideAccess(meta: AccessMeta, session: AccessSession, fullPath: string): AccessDecision {
   const hasContentRole = session.role === 'admin' || session.role === 'editor';
 
+  if (meta.public && meta.authFlow) return { allow: true };
   if (meta.public) {
     if (session.status === 'signed-in') {
       return { allow: false, redirect: { name: hasContentRole ? 'dashboard' : 'access-denied' } };

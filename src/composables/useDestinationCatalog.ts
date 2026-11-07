@@ -27,6 +27,7 @@ export function createDestinationCatalog(fetcher: () => Promise<DestinationLoadR
   const sourceLabel = computed(() => {
     if (status.value === 'loading') return 'Loading campus data...';
     if (status.value === 'supabase') return 'Live campus data';
+    if (status.value === 'cache') return 'Saved campus data (offline)';
     if (status.value === 'supabase-legacy') return 'Live campus data (basic details)';
     return failed.value ? 'Offline data · campus server unavailable' : 'Offline data';
   });
@@ -37,7 +38,7 @@ export function createDestinationCatalog(fetcher: () => Promise<DestinationLoadR
       const result = await fetcher();
       if (result.reason) console.warn(`[1Locate] Using bundled destinations: ${result.reason}`);
       // A failed refresh keeps the live catalog that is already in use.
-      if (result.source === 'local' && isLive.value) return;
+      if ((result.source === 'local' || result.source === 'cache') && isLive.value) return;
       setDestinationCatalog(result.destinations);
       destinations.value = getDestinations();
       status.value = result.source;

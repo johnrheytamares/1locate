@@ -71,7 +71,7 @@ describe('voice search on the destination list', () => {
 
     expect(mocks.push).toHaveBeenCalledWith('/destinations/registrar');
     expect(mocks.push).not.toHaveBeenCalledWith(expect.stringContaining('/navigate'));
-    expect(mocks.speak).toHaveBeenLastCalledWith('Registrar Office. Tap Start Navigation when you are ready.');
+    expect(mocks.speak).toHaveBeenLastCalledWith('Registrar Office. Review its details, then tap View on Map.');
   });
 
   test('several equal matches are listed for the user to pick', async () => {
