@@ -992,22 +992,12 @@ function formatCoordinate(value: number | null | undefined): string {
   return value == null ? 'unavailable' : value.toFixed(6);
 }
 
-<<<<<<< HEAD
 async function onArrivalDismiss(event: CustomEvent<{ role?: string }>) {
   showArrival.value = false;
   if (event.detail.role !== 'confirm' || !destination.value || !arrived.value) return;
   if (simulationUsed.value) { chooseAnotherDestination(); return; }
   confirmRoomArrival(destination.value);
   await endSession();
-  ionRouter.replace('/arrival');
-}
-
-function endSession() {
-  navigationSession += 1;
-  showCheckpoint.value = false;
-=======
-function onArrivalDismiss() {
-  showArrival.value = false;
   offerAfterArrival();
 }
 
@@ -1019,12 +1009,13 @@ function onFeedbackClose(message?: string) {
       .then((toast) => toast.present())
       .catch(() => undefined);
   }
-  ionRouter.replace('/destinations');
+  ionRouter.replace('/arrival');
 }
 
 function endSession() {
+  navigationSession += 1;
+  showCheckpoint.value = false;
   showFeedback.value = false;
->>>>>>> 7267a076da2c2f207f4efc0a584e12cde74b804e
   walking.stop();
   clearAlignTimer();
   resetVoice();
