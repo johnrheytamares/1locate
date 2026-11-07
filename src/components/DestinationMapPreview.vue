@@ -2,13 +2,17 @@
   <section class="map-preview" :class="{ fullscreen }" aria-label="Satellite destination preview">
     <div class="map-heading"><strong>Destination preview</strong><button :disabled="!mapReady" @click="recenter">Recenter</button></div>
     <div ref="container" class="map-canvas" aria-label="Satellite map with your location and building entrance" />
+    <div class="map-status">
     <p class="legend"><span class="user-dot">●</span> Your location <span class="entrance-dot">●</span> Building entrance</p>
     <p v-if="mapMessage" role="status">{{ mapMessage }}</p>
     <p role="status">{{ locationMessage }}</p>
     <p v-if="!target">Entrance coordinates are not set. Ask the campus administrator to verify this entrance.</p>
     <p v-if="fix">GPS accuracy: ±{{ Math.round(fix.accuracy) }} m. The pin is an estimate.</p>
     <div class="map-actions"><button v-if="mapMessage" @click="retryMap">Retry map</button><button @click="locate">Update my location</button></div>
+    <p v-if="fullscreen" role="status">{{ routeMessage }}</p>
+    <p v-if="fullscreen" class="route-credit">Walking routes: <a href="https://routing.openstreetmap.de/about.html" target="_blank" rel="noopener noreferrer">FOSSGIS / OpenStreetMap</a> · <a href="https://www.openstreetmap.org/fixthemap" target="_blank" rel="noopener noreferrer">Fix the map</a></p>
     <p class="map-note">Outdoor entrance preview. Indoor guidance starts after entrance confirmation.</p>
+    </div>
   </section>
 </template>
 
@@ -21,12 +25,54 @@ import type { Map as MapInstance, Marker, GeoJSONSource } from 'maplibre-gl';
 import type { OutdoorTarget } from '@/models/navigation';
 import type { UserLocation } from '@/models/location';
 import { checkPermission, requestPermission, toLocationError, toUserLocation } from '@/services/location.service';
-import { destinationPoint } from '@/services/geo.service';
+import { calculateDistance, destinationPoint } from '@/services/geo.service';
+import { fetchWalkingRoute, type WalkingRoute } from '@/services/walking-route.service';
 import { surveyedTarget } from '@/services/outdoor-navigation.service';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
 const props = defineProps<{ entrance: OutdoorTarget; fullscreen?: boolean }>();
-const emit = defineEmits<{ location: [value: UserLocation] }>();
+const emit = defineEmits<{ location: [value: UserLocation]; route: [value: WalkingRoute | null] }>();
+const walkingRoute = ref<WalkingRoute | null>(null);
+const routeMessage = ref('Waiting for GPS to find a walking route.');
+let routeAbort: AbortController | undefined;
+let lastRouteAt = 0;
+let lastRouteStart: UserLocation | null = null;
+
+function renderRoute() {
+  if (!map || !mapReady.value) return;
+  const data: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: walkingRoute.value ? [{ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: walkingRoute.value.coordinates } }] : [] };
+  const source = map.getSource('walking-route') as GeoJSONSource | undefined;
+  if (source) source.setData(data);
+  else {
+    map.addSource('walking-route', { type: 'geojson', data });
+    map.addLayer({ id: 'walking-route-outline', type: 'line', source: 'walking-route', layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': '#ffffff', 'line-width': 9 } });
+    map.addLayer({ id: 'walking-route-line', type: 'line', source: 'walking-route', layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': '#2563eb', 'line-width': 5 } });
+  }
+}
+
+async function updateRoute() {
+  if (!props.fullscreen || !target.value || !fix.value) return;
+  if (fix.value.accuracy > 60) { routeMessage.value = 'Waiting for more accurate GPS to plan a walking route.'; return; }
+  const now = Date.now();
+  if (lastRouteAt && now - lastRouteAt < 15000) return;
+  if (walkingRoute.value && lastRouteStart && calculateDistance(lastRouteStart.latitude, lastRouteStart.longitude, fix.value.latitude, fix.value.longitude) < 30) return;
+  lastRouteAt = now;
+  routeAbort?.abort();
+  const controller = new AbortController(); routeAbort = controller;
+  const start = fix.value;
+  walkingRoute.value = null; emit('route', null); renderRoute();
+  routeMessage.value = 'Finding a walking route…';
+  const timeout = setTimeout(() => controller.abort(), 12000);
+  try {
+    const result = await fetchWalkingRoute(start, target.value, controller.signal);
+    if (disposed || controller !== routeAbort || controller.signal.aborted) return;
+    walkingRoute.value = result; lastRouteStart = start;
+    emit('route', result); renderRoute(); recenter();
+    routeMessage.value = 'Follow the blue walking path. Check access and crossings on site; campus paths may be unmapped.';
+  } catch {
+    if (!disposed && controller === routeAbort) routeMessage.value = 'Walking route unavailable. Check your connection or try Update my location. No path has been inferred.';
+  } finally { clearTimeout(timeout); }
+}
 const target = computed(() => surveyedTarget(props.entrance));
 const container = ref<HTMLDivElement>();
 const fix = ref<UserLocation | null>(null);
@@ -48,8 +94,12 @@ function recenter() {
   const points: [number, number][] = [];
   if (target.value) points.push([target.value.longitude, target.value.latitude]);
   if (fix.value) points.push([fix.value.longitude, fix.value.latitude]);
+  if (walkingRoute.value) points.push(...walkingRoute.value.coordinates);
   if (points.length === 1) map.jumpTo({ center: points[0], zoom: 17 });
-  if (points.length === 2) map.fitBounds([points[0], points[1]], { padding: 65, maxZoom: 18, duration: 0 });
+  if (points.length >= 2) {
+    const bounds: [[number, number], [number, number]] = [[Math.min(...points.map(p => p[0])), Math.min(...points.map(p => p[1]))], [Math.max(...points.map(p => p[0])), Math.max(...points.map(p => p[1]))]];
+    map.fitBounds(bounds, { padding: props.fullscreen ? { top: 75, right: 55, bottom: 310, left: 55 } : 65, maxZoom: 18, duration: 0 });
+  }
 }
 
 function renderLocation() {
@@ -79,6 +129,7 @@ function renderLocation() {
 }
 
 async function stopLocation() {
+  routeAbort?.abort(); routeAbort = undefined;
   generation += 1;
   const id = watchId;
   watchId = undefined;
@@ -105,6 +156,7 @@ async function locate() {
       emit('location', next);
       locationMessage.value = permission.precise ? 'Your location is updating.' : 'Approximate location only. Enable precise location for a better pin.';
       renderLocation();
+      void updateRoute();
     });
     if (disposed || session !== generation) await Geolocation.clearWatch({ id }).catch(() => {});
     else watchId = id;
@@ -138,7 +190,7 @@ async function retryMap() {
       onRemove() {},
     }, 'bottom-left');
     if (target.value) new module.Marker({ color: '#e34935' }).setLngLat([target.value.longitude, target.value.latitude]).setPopup(new module.Popup().setText(props.entrance.name)).addTo(map);
-    map.on('load', () => { mapReady.value = true; mapMessage.value = ''; renderLocation(); });
+    map.on('load', () => { mapReady.value = true; mapMessage.value = ''; renderLocation(); renderRoute(); });
     map.on('error', () => { mapMessage.value = 'Some map imagery could not load. Check your connection or map access, then retry.'; });
     renderLocation();
   } catch {
@@ -172,6 +224,10 @@ p { margin: 8px 12px; font-size: 12px; line-height: 1.4; }
 .map-note { padding-bottom: 10px; color: #60788e; }
 .map-canvas :deep(.maplibregl-ctrl-attrib) { font-size: 9px; }
 .fullscreen { margin: 0; height: 100%; border-radius: 0; display: flex; flex-direction: column; }
+.fullscreen { position: relative; }
+.fullscreen .map-heading { position: absolute; top: 10px; left: 12px; right: 52px; z-index: 2; border-radius: 12px; background: #fffffff2; box-shadow: 0 3px 14px #12263f26; }
+.fullscreen .map-status { position: absolute; bottom: var(--preview-panel-height, 190px); left: 10px; right: 10px; z-index: 2; padding: 7px 0; border-radius: 12px; background: #fffffff2; max-height: 30%; overflow: auto; }
+.route-credit { font-size: 10px; }
 .fullscreen .map-canvas { flex: 1; min-height: 180px; height: auto; }
 .fullscreen p { margin: 3px 12px; font-size: 11px; }
 .fullscreen .map-note { display: none; }
