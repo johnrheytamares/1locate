@@ -34,14 +34,20 @@ describe('route authoring', () => {
     expect(() => destinationPayload('library', room, { ...building, id: 'other' }, [])).toThrow();
     expect(() => destinationPayload('library', room, { ...building, entrance_name: null }, [])).toThrow();
   });
-  it('counts distinct walking peaks, with debounce and low-crossing rearming', () => {
+  it('rejects stationary noise, isolated pulses and jolts; counts sustained walking conservatively', () => {
     const detector = new WalkingPeaks();
-    expect(detector.sample(2, 0)).toBe(true);
-    expect(detector.sample(3, 400)).toBe(false);
-    detector.sample(0, 410);
-    expect(detector.sample(2, 500)).toBe(true);
-    detector.sample(0, 510);
-    expect(detector.sample(2, 600)).toBe(false);
+    for (let t = 0; t < 1000; t += 50) expect(detector.sample(0.3, t)).toBe(false);
+    const pulse = (t: number) => {
+      detector.sample(0, t); detector.sample(2, t + 20);
+      return detector.sample(0, t + 120);
+    };
+    expect(pulse(1000)).toBe(false);
+    expect(pulse(1600)).toBe(false);
+    expect(pulse(2200)).toBe(false);
+    expect(pulse(2800)).toBe(true);
+    expect(pulse(3400)).toBe(true);
+    expect(detector.sample(10, 3800)).toBe(false);
+    expect(pulse(4000)).toBe(false);
     expect(detector.sample(NaN, 1000)).toBe(false);
   });
 });

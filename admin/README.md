@@ -1,3 +1,5 @@
+> Updated 2026-11-09: Floor-plan navigation and the Indoor Maps & Routes editor are retired from app access. Use saved camera routes. Floor-map documentation below is historical; existing database records are retained.
+
 # 1Locate Admin
 
 Web admin for 1Locate campus content (Phase 4B). It manages buildings, floors, rooms and offices,

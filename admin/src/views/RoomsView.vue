@@ -94,18 +94,21 @@
       </table>
     </div>
 
-    <div v-if="editing" class="overlay" role="dialog" aria-modal="true" aria-label="Room form">
+    <div v-if="editing" class="overlay room-overlay" role="dialog" aria-modal="true" aria-labelledby="room-editor-title" @keydown.esc="!saving && (editing = null)">
       <div class="dialog room-dialog">
-        <div class="dialog-title">
+        <div class="dialog-title room-editor-header">
           <div>
-            <h2>{{ editing.id ? 'Edit Room' : 'Add Room' }}</h2>
-            <p class="muted">{{ editing.id ? 'Update this room.' : 'Add a room to a building.' }}</p>
+            <span class="room-eyebrow">Campus management</span>
+            <h2 id="room-editor-title">{{ editing.id ? 'Edit Room' : 'Add Room' }}</h2>
+            <p class="muted">Room information, location and visibility.</p>
           </div>
           <button class="ghost icon-btn" type="button" aria-label="Close" :disabled="saving" @click="editing = null">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M6.4 5 12 10.6 17.6 5 19 6.4 13.4 12 19 17.6 17.6 19 12 13.4 6.4 19 5 17.6 10.6 12 5 6.4z"/></svg>
           </button>
         </div>
-        <form novalidate data-test="room-form" @submit.prevent="onSave">
+        <div class="room-editor-body">
+        <form id="room-editor-form" class="room-details-panel" novalidate data-test="room-form" @submit.prevent="onSave">
+          <div class="room-section-heading"><h3>Room details</h3><p>Fields marked * are required.</p></div>
           <p v-if="formError" class="notice error" role="alert" data-test="form-error">{{ formError }}</p>
           <div class="form-grid">
             <FormField v-slot="{ id }" name="buildingId" label="Building" :error="errors.buildingId" required>
@@ -137,16 +140,23 @@
             <FormField v-slot="{ id }" name="description" label="Description" :error="errors.description" hint="Services, office hours, or other verified details." full>
               <textarea :id="id" v-model="form.description" maxlength="2000" />
             </FormField>
-            <div class="field">
-              <label class="checkbox"><input v-model="form.isActive" type="checkbox" /> Published</label>
-            </div>
+            <label class="room-publish full" :class="{ 'is-published': form.isActive }">
+              <span><strong>Published</strong><small>Available to linked destinations when the building is published.</small></span>
+              <input v-model="form.isActive" type="checkbox" role="switch" aria-label="Published" />
+              <span class="room-switch" aria-hidden="true"></span>
+            </label>
           </div>
-          <div class="form-actions">
-            <button type="submit" :disabled="saving" data-test="save">{{ saving ? 'Saving...' : 'Save Room' }}</button>
-          </div>
+
         </form>
-        <PhotoManager v-if="editing.id" kind="room" :parent-id="editing.id" />
-        <p v-else class="muted section">Save the room first, then add photos.</p>
+        <aside class="room-photos-panel" aria-label="Room photos">
+          <PhotoManager v-if="editing.id" kind="room" :parent-id="editing.id" />
+          <div v-else class="room-photo-placeholder"><h3>Room photos</h3><div class="photo-placeholder-icon" aria-hidden="true">+</div><strong>Add photos after saving</strong><p>Save the room first, then upload photos to help visitors recognize it.</p></div>
+        </aside>
+        </div>
+        <footer class="room-editor-footer">
+          <p>Room publishing and navigation routes are managed separately.</p>
+          <div class="room-footer-actions"><button class="secondary" type="button" :disabled="saving" @click="editing = null">Cancel</button><button type="submit" form="room-editor-form" :disabled="saving" data-test="save">{{ saving ? 'Saving...' : 'Save Room' }}</button></div>
+        </footer>
       </div>
     </div>
 
@@ -377,3 +387,52 @@ onMounted(async () => {
   if (create === '1' && buildings.value.length > 0) openCreate();
 });
 </script>
+
+<style scoped>
+.room-overlay { padding:24px; background:rgb(9 27 49 / 58%); backdrop-filter:blur(3px); }
+.dialog.room-dialog { display:flex; flex-direction:column; width:min(1120px,100%); max-height:calc(100dvh - 48px); padding:0; overflow:hidden; border:1px solid #dbe5f1; border-radius:22px; box-shadow:0 28px 80px #071d3a40; }
+.room-dialog .room-editor-header { margin:0; padding:22px 28px; border-bottom:1px solid #e5edf5; flex-shrink:0; }
+.room-eyebrow { display:block; font-size:10px; font-weight:750; text-transform:uppercase; letter-spacing:.12em; color:#64748b; margin-bottom:4px; }
+.room-dialog .room-editor-header h2 { margin:0 0 5px; font-size:22px; line-height:1.3; }
+.room-editor-header .icon-btn { align-self:flex-start; background:#f8fafc; border-color:#e2e8f0; flex-shrink:0; }
+.room-editor-body { display:grid; grid-template-columns:minmax(0,1.55fr) minmax(280px,1fr); gap:24px; padding:24px 28px; min-height:0; overflow:auto; overscroll-behavior:contain; background:#f8fafc; }
+.room-details-panel,.room-photos-panel { min-width:0; padding:22px; border:1px solid #e2e8f0; border-radius:16px; background:#fff; align-self:start; }
+.room-section-heading { margin-bottom:20px; }
+.room-section-heading h3 { font-size:16px; margin-bottom:4px; }
+.room-section-heading p { margin:0; font-size:12px; color:#64748b; }
+.room-dialog .form-grid { grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }
+.room-dialog :deep(.field) { min-width:0; gap:6px; }
+.room-dialog :deep(.field label) { font-size:12px; font-weight:650; }
+.room-dialog :deep(input:not([type=checkbox]):not([type=file])),.room-dialog :deep(select) { height:42px; padding:9px 12px; font-size:14px; border-radius:10px; }
+.room-dialog :deep(textarea) { min-height:100px; padding:10px 12px; font-size:14px; }
+.room-dialog :deep(.field .hint) { font-size:11px; line-height:1.5; }
+.room-publish { position:relative; grid-column:1/-1; display:flex; gap:16px; align-items:center; justify-content:space-between; padding:16px; margin-top:4px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:12px; cursor:pointer; }
+.room-publish.is-published { background:#f0fdf7; border-color:#bbebd5; }
+.room-publish strong { display:block; font-size:13px; color:#133b5c; }
+.room-publish small { display:block; margin-top:3px; max-width:40ch; font-size:11px; line-height:1.5; color:#64748b; }
+.room-publish input[type=checkbox] { position:absolute; width:1px; height:1px; min-height:0; padding:0; border:0; opacity:0; }
+.room-switch { flex:0 0 40px; width:40px; height:24px; border-radius:20px; background:#94a3b8; padding:3px; transition:background .15s; }
+.room-switch::after { content:''; display:block; width:18px; height:18px; border-radius:50%; background:#fff; box-shadow:0 1px 3px #0002; transition:transform .15s; }
+.room-publish input:checked + .room-switch { background:#16a375; }
+.room-publish input:checked + .room-switch::after { transform:translateX(16px); }
+.room-publish input:focus-visible + .room-switch { outline:3px solid #2563eb; outline-offset:3px; }
+.room-photos-panel :deep(.section) { margin:0; padding:0; border:0; }
+.room-photos-panel :deep(h3) { margin-bottom:6px; font-size:16px; }
+.room-photos-panel :deep(.upload) { display:flex; flex-direction:column; align-items:stretch; gap:12px; margin:16px 0 12px; padding:16px; background:#f8fbff; border:1px dashed #b5cbed; border-radius:12px; }
+.room-photos-panel :deep(.file-field) { align-items:center; gap:10px; }
+.room-photos-panel :deep(.choose) { border-radius:9px; padding:9px 16px; background:#fff; border:1px solid #dbe5f1; font-size:12px; }
+.room-photos-panel :deep(.empty) { margin:0; padding:18px 8px; font-size:13px; }
+.room-photos-panel :deep(.preview),.room-photos-panel :deep(.viewer img) { max-width:100%; object-fit:contain; }
+.room-photo-placeholder { text-align:center; color:#64748b; }
+.room-photo-placeholder h3 { text-align:left; }
+.photo-placeholder-icon { width:56px; height:56px; border-radius:16px; background:#eff6ff; color:#2563eb; font-size:30px; margin:28px auto 16px; }
+.room-photo-placeholder strong { display:block; font-size:14px; color:#334155; }
+.room-photo-placeholder p { font-size:12px; line-height:1.6; margin:8px 0 16px; }
+.room-editor-footer { display:flex; align-items:center; justify-content:space-between; gap:20px; padding:16px 28px max(16px,env(safe-area-inset-bottom)); border-top:1px solid #e2e8f0; background:#fff; flex-shrink:0; }
+.room-editor-footer p { font-size:11px; color:#64748b; margin:0; max-width:46ch; }
+.room-footer-actions { display:flex; gap:10px; flex-shrink:0; }
+.room-footer-actions button { min-height:42px; min-width:100px; font-size:13px; }
+@media (max-width:800px) { .room-editor-body { grid-template-columns:minmax(0,1fr); gap:16px; padding:18px; } .room-dialog .room-editor-header { padding:20px; } .room-editor-footer { padding:14px 20px; } }
+@media (max-width:480px) { .room-overlay { padding:10px; } .dialog.room-dialog { max-height:calc(100dvh - 20px); border-radius:18px; } .room-dialog .room-editor-header { padding:16px; } .room-dialog .room-editor-header h2 { font-size:20px; } .room-editor-body { padding:12px; } .room-details-panel,.room-photos-panel { padding:16px; } .room-dialog .form-grid { grid-template-columns:minmax(0,1fr); gap:14px; } .room-editor-footer { flex-direction:column; align-items:stretch; gap:12px; padding:14px 16px max(14px,env(safe-area-inset-bottom)); } .room-footer-actions { width:100%; } .room-footer-actions button { flex:1; min-width:0; } }
+@media (prefers-reduced-motion:reduce) { .room-switch,.room-switch::after { transition:none; } }
+</style>

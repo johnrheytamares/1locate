@@ -43,7 +43,7 @@
     <ion-content v-else class="nav-content" :scroll-y="showMapWait">
       <main :class="{ 'navigation-layout': !showMapWait, 'map-guidance': mapVisible }">
       <div v-if="simulationUsed" class="simulation-notice" role="status">TEST SESSION - progress is not a real journey.</div>
-      <DestinationMapPreview v-if="mapVisible && destination" :entrance="destination.outdoorTarget" fullscreen />
+      <DestinationMapPreview v-if="mapVisible && destination" :entrance="destination.outdoorTarget" fullscreen external :live-location="outdoor.location" :live-route="outdoorRouting.route.value" />
       <div v-if="showMapWait" class="sheet">
         <div class="map-card" aria-hidden="true">
           <span class="map-pin"><ion-icon :icon="location" /></span>
@@ -104,7 +104,7 @@
 
       <div class="sheet" :class="{ 'guidance-sheet': !showMapWait }">
         <div v-if="!showMapWait" class="journey-card">
-          <div class="journey-identity"><span class="journey-pin"><ion-icon :icon="location" aria-hidden="true" /></span><div><span class="dest-kicker">{{ isOutdoor ? 'Building entrance' : 'Destination' }}</span><h2>{{ markerName }}</h2><p data-test="journey-distance">{{ isOutdoor ? 'Distance' : 'Est. remaining' }}: <strong>{{ distanceLabel }}</strong></p></div></div>
+          <div class="journey-identity"><span class="journey-pin"><ion-icon :icon="location" aria-hidden="true" /></span><div><span class="dest-kicker">{{ isOutdoor ? 'Building entrance' : 'Destination' }}</span><h2>{{ markerName }}</h2><p data-test="journey-distance">{{ isOutdoor ? (outdoorRouting.progress.value ? 'Walking remaining' : 'Straight-line to entrance') : 'Est. remaining' }}: <strong>{{ distanceLabel }}</strong></p></div></div>
           <div class="journey-instruction"><ion-icon :icon="paperPlaneOutline" aria-hidden="true" /><strong>{{ instruction }}</strong></div>
         </div>
         <div v-if="cameraMessage && !mapVisible" class="camera-banner">
@@ -137,6 +137,9 @@
           <ion-button size="small" fill="outline" data-test="stop-navigation" @click="chooseAnotherDestination">Stop</ion-button>
           <ion-button v-if="stage === 'indoor' && !navigation.paused && !arrived" size="small" fill="outline" @click="showCheckpoint = true">Confirm checkpoint</ion-button>
         </div>
+        <p v-if="isOutdoor" class="evidence-note" role="status">{{ outdoorRouting.message.value }} {{ outdoorRouting.route.value?.source === 'campus' ? 'Campus walking network.' : outdoorRouting.route.value ? 'OpenStreetMap route; check access on site.' : '' }} Camera arrows are direction overlays, not ground-anchored AR.</p>
+        <ion-button v-if="isOutdoor" size="small" fill="outline" :disabled="outdoorRouting.status.value === 'loading'" @click="outdoorRouting.retry">Retry walking route</ion-button>
+        <ion-button v-if="isOutdoor && !showMapWait" size="small" fill="outline" data-test="at-entrance" @click="onAtEntrance">I'm at the entrance</ion-button>
         <p v-if="mapVisible && stage === 'indoor'" class="evidence-note">Satellite GPS is an outdoor reference only. It does not track the floor or room.</p>
         <p v-if="stage === 'indoor'" class="evidence-note">{{ manualProgress ? 'Progress includes user-confirmed checkpoints.' : 'Step-estimated route progress; not room positioning.' }}<template v-if="heading == null"> Heading unavailable. Follow the written route and confirm checkpoints.</template></p>
         <div v-if="stage === 'indoor' && arrived && !confirmingRestart" class="route-complete">
@@ -282,7 +285,6 @@
       :buttons="[
         { text: 'Choose another destination', role: 'cancel' },
         { text: 'Start indoor route', role: 'confirm' },
-        ...(destination?.details?.roomId ? [{ text: 'Use floor-map checkpoints', role: 'floor-map' }] : []),
       ]"
       @didDismiss="onEntranceDismiss"
     />
@@ -353,6 +355,7 @@ import DestinationMapPreview from '@/components/DestinationMapPreview.vue';
 import { confirmRoomArrival, markTestJourney, clearJourney } from '@/services/journey.service';
 import { useArrivalFeedback } from '@/composables/useArrivalFeedback';
 import { LOCATION_RATIONALE, useOutdoorGps } from '@/composables/useOutdoorGps';
+import { useOutdoorRouting } from '@/composables/useOutdoorRouting';
 import { useIndoorWalking } from '@/composables/useIndoorWalking';
 import { useVoice } from '@/composables/useVoice';
 import { SHOW_DEV_TOOLS } from '@/config/dev-tools';
@@ -394,7 +397,6 @@ import {
   accuracyLevel,
   arrivalStatus,
   isImprovingAccuracy,
-  outdoorInstruction,
 } from '@/services/outdoor-navigation.service';
 import { watchHeading } from '@/services/orientation.service';
 
@@ -411,6 +413,7 @@ const destination = ref<Destination | null>(null);
 const navigation = ref(createTestNavigation());
 const stage = ref<NavigationStage>('outdoor');
 const heading = ref<number | null>(null);
+const headingUpdatedAt = ref(0);
 const cameraMessage = ref('');
 const preparing = ref(true);
 const routeReady = ref(false);
@@ -466,6 +469,8 @@ const {
   state: outdoor,
   simulatedAccuracy,
 } = gps;
+const outdoorRoutingActive = computed(() => pageOpen.value && appActive.value && stage.value === 'outdoor' && !outdoor.value.arrived);
+const outdoorRouting = useOutdoorRouting(outdoor, outdoorRoutingActive, heading, headingUpdatedAt);
 
 let cameraSession = 0;
 let navigationSession = 0;
@@ -565,12 +570,12 @@ const outdoorGuiding = computed(() => (
   outdoor.value.location != null && outdoor.value.target != null && !outdoor.value.arrived
 ));
 
-const required = computed(() => (isOutdoor.value ? outdoor.value.bearing : requiredHeading(navigation.value)));
+const required = computed(() => (isOutdoor.value ? (outdoorRouting.canGuide.value ? outdoorRouting.progress.value?.bearing ?? null : null) : requiredHeading(navigation.value)));
 const offset = computed(() => headingOffset(heading.value, required.value));
 
 const distanceLabel = computed(() => {
   if (!isOutdoor.value) return `${Number(remainingMeters(navigation.value).toFixed(1))} m`;
-  const distance = outdoor.value.distance;
+  const distance = outdoorRouting.progress.value?.remaining ?? outdoor.value.distance;
   return distance == null ? '-- m' : `${Math.round(distance)} m`;
 });
 
@@ -588,12 +593,13 @@ const instruction = computed(() => {
   if (entranceUnmapped.value) {
     return `The GPS location of ${entranceName.value} is not set yet. Walk to ${entranceName.value}, then tap I'm at the entrance.`;
   }
-  return outdoorInstruction(outdoor.value, heading.value, buildingName.value);
+  return outdoorRouting.message.value;
 });
 
 const arrows = computed(() => {
   if (!isOutdoor.value) return guideArrows(navigation.value);
-  return outdoorGuiding.value && !locationPrompt.value ? OUTDOOR_ARROWS : [];
+  return outdoorGuiding.value && !locationPrompt.value && outdoorRouting.canGuide.value
+    ? OUTDOOR_ARROWS.map(arrow => ({ ...arrow, direction: outdoorRouting.direction.value })) : [];
 });
 
 const pathOffset = computed(() => {
@@ -861,22 +867,13 @@ function onEntranceDismiss(event: CustomEvent<{ role?: string }>) {
   showEntrance.value = false;
   if (stage.value !== 'entrance') return;
   const role = event.detail?.role;
-  if (role === 'floor-map') {
-    openFloorMap();
-  } else if (role === 'confirm') {
+  if (role === 'confirm') {
     enterIndoor();
   } else if (role === 'cancel') {
     chooseAnotherDestination();
   } else {
     void nextTick(() => { showEntrance.value = true; });
   }
-}
-
-function openFloorMap() {
-  const roomId = destination.value?.details?.roomId;
-  if (!roomId) return;
-  endSession();
-  ionRouter.push({ path: '/indoor-map', query: { room: roomId } });
 }
 
 function onLostWay() {
@@ -1052,6 +1049,7 @@ onIonViewDidEnter(async () => {
   stopHeading();
   stopHeading = watchHeading((value) => {
     heading.value = value;
+    headingUpdatedAt.value = Date.now();
   });
   void appHandle?.remove();
   void App.addListener('appStateChange', ({ isActive }) => {

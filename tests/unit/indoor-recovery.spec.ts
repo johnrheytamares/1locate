@@ -332,7 +332,7 @@ describe('Camera Navigation distance', () => {
 
     expect(wrapper.find('.journey-identity').text()).toContain('Building entrance');
     expect(wrapper.find('.journey-identity h2').text()).toBe('Main Entrance');
-    expect(wrapper.find('[data-test="journey-distance"]').text()).toBe('Distance: 7721223 m');
+    expect(wrapper.find('[data-test="journey-distance"]').text()).toBe('Straight-line to entrance: 7721223 m');
 
     mocks.gps!.state.value = { ...mocks.gps!.state.value, arrived: true };
     await flushPromises();
@@ -403,18 +403,25 @@ describe('Camera Navigation distance', () => {
   });
 
   test('the feedback popup appears once, only after the arrival message is dismissed', async () => {
+    const { beginJourney } = await import('@/services/journey.service');
+    beginJourney('registrar');
+    mocks.gpsSource = 'real';
     await enterIndoorDev();
     const feedback = () => wrapper!.find('[data-test="arrival-feedback"]');
-    for (let index = 0; index < 3; index += 1) await moveForwardButton().trigger('click');
     expect(feedback().exists()).toBe(false);
-    mocks.heading?.(180);
-    await flushPromises();
-    await new Promise((resolve) => setTimeout(resolve, TURN_ALIGNMENT_HOLD_MS + 100));
-    for (let index = 0; index < 4; index += 1) await moveForwardButton().trigger('click');
-    await flushPromises();
+    // Physical checkpoint confirmations are real progress; debug buttons mark a test journey.
+    for (let index = 0; index < 3; index += 1) {
+      const button = wrapper!.findAll('ion-button').find(item => item.text().trim() === 'Confirm checkpoint');
+      expect(button).toBeDefined();
+      await button!.trigger('click');
+      const checkpoint = wrapper!.findAllComponents(IonAlert).find(alert => alert.props('header') === 'Confirm physical checkpoint');
+      checkpoint!.vm.$emit('didDismiss', new CustomEvent('ionAlertDidDismiss', { detail: { role: 'confirm' } }));
+      await flushPromises();
+    }
 
     expect(feedback().exists()).toBe(false);
-    const arrival = wrapper!.findAllComponents(IonAlert).find((alert) => alert.props('header') === 'Estimated route complete')!;
+    const arrival = wrapper!.findAllComponents(IonAlert).find((alert) => alert.props('isOpen') && alert.props('header') === 'Confirm destination')!;
+    expect(arrival).toBeDefined();
     arrival.vm.$emit('didDismiss', new CustomEvent('ionAlertDidDismiss', { detail: { role: 'confirm' } }));
     await flushPromises();
     expect(feedback().exists()).toBe(true);
@@ -423,7 +430,7 @@ describe('Camera Navigation distance', () => {
     await wrapper!.find('[data-test="maybe-later"]').trigger('click');
     await flushPromises();
     expect(feedback().exists()).toBe(false);
-    expect(mocks.replace).toHaveBeenCalledWith('/destinations');
+    expect(mocks.replace).toHaveBeenCalledWith('/arrival');
 
     arrival.vm.$emit('didDismiss', new CustomEvent('ionAlertDidDismiss', { detail: { role: 'confirm' } }));
     await flushPromises();

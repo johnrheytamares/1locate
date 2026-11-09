@@ -1,5 +1,16 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { afterEach, describe, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+
+// Each test starts with empty browser storage, including Node versions with native localStorage.
+beforeEach(() => {
+  const saved = new Map<string, string>();
+  vi.stubGlobal('localStorage', {
+    getItem: (key: string) => saved.get(key) ?? null,
+    setItem: (key: string, value: string) => { saved.set(key, value); },
+    removeItem: (key: string) => { saved.delete(key); },
+    clear: () => saved.clear(),
+  });
+});
 import {
   fetchDestinations,
   getDestinationImageUrls,
@@ -80,6 +91,7 @@ function fakeClient(responses: Record<string, Response>) {
 afterEach(() => {
   setDestinationCatalog(DESTINATIONS);
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 describe('Supabase destination rows', () => {
@@ -257,6 +269,16 @@ describe('fetchDestinations', () => {
     expect(result.failed).toBe(true);
     expect(result.destinations).toBe(DESTINATIONS);
     expect(result.reason).toBeTruthy();
+  });
+
+  test('uses the last successful catalog when a later request fails', async () => {
+    const online = fakeClient({ navigation_catalog: { data: [catalogRow()] } });
+    expect((await fetchDestinations(online.client)).source).toBe('supabase');
+    const offline = fakeClient({ navigation_catalog: new Error('offline') });
+    const result = await fetchDestinations(offline.client);
+    expect(result.source).toBe('cache');
+    expect(result.failed).toBe(true);
+    expect(result.destinations[0].details?.roomNumber).toBe('A-101');
   });
 
   test('skips individual invalid rows and keeps the valid ones', async () => {

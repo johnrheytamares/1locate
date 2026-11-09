@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "verified": false,
+  "nodes": [
+    {
+      "id": "main-entrance",
+      "name": "Main Entrance",
+      "latitude": 13.38636111,
+      "longitude": 121.16330556,
+      "entrance": true
+    },
+    {
+      "id": "it-building-entrance",
+      "name": "IT Building Entrance",
+      "latitude": 13.38822222,
+      "longitude": 121.16169444,
+      "entrance": true
+    }
+  ],
+  "edges": []
+}

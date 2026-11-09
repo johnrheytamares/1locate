@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - 'admin/**'
+      - 'shared/**'
       - '.github/workflows/build-admin-apk.yml'
   workflow_dispatch:
 

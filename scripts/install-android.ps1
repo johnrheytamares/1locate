@@ -46,8 +46,13 @@ if (-not $devices) {
 }
 
 Set-Location $Project
-Step 'Build web app' { npm run build }
-Step 'Capacitor sync' { npx cap sync android }
+if (Test-Path (Join-Path $Project 'src\views\ARNavigationPage.vue')) {
+  Step 'Mobile unit tests' { npx.cmd vitest run }
+} else {
+  Step 'Admin unit tests' { npm.cmd test }
+}
+Step 'Build web app' { npm.cmd run build }
+Step 'Capacitor sync' { npx.cmd cap sync android }
 Set-Location (Join-Path $Project 'android')
 Step "Install $appId" { .\gradlew.bat installDebug } "If it says INSTALL_FAILED_UPDATE_INCOMPATIBLE, the phone has a build signed elsewhere (for example GitHub). Run: adb uninstall $appId  (deletes the app data), then npm run phone again."
 Set-Location $Project

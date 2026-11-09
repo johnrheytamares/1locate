@@ -1,6 +1,6 @@
 <template>
   <div>
-    <header class="page-header catalog-head dest-head">
+    <header v-show="!editor" class="page-header catalog-head dest-head">
       <div class="title-row">
         <span class="page-mark" aria-hidden="true"><img class="page-brand-logo" src="/images/1locate-logo.png" alt="" />
         </span>
@@ -11,7 +11,7 @@
       </div>
     </header>
 
-    <div class="dest-summary">
+    <div v-show="!editor" class="dest-summary">
       <article class="stat card tone-blue dest-count">
         <span class="stat-icon" style="color:#1d4ed8" aria-hidden="true"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 14.5 9 2.5 2.5 0 0 1 12 11.5z"/></svg></span>
         <div><strong>{{ destinations.length }}</strong><span>Total Destinations</span></div>
@@ -22,13 +22,13 @@
     <p v-if="error" class="notice error" role="alert" data-test="page-error">{{ error }}</p>
     <p v-if="notice" class="notice ok" data-test="page-notice">{{ notice }}</p>
 
-    <div class="create-bar">
+    <div v-show="!editor" class="create-bar">
     <button type="button" :disabled="!!addDisabledReason" :aria-describedby="addDisabledReason ? 'add-destination-help' : undefined" @click="openEditor()">Add Destination</button>
     <p v-if="addDisabledReason" id="add-destination-help" class="muted">{{ addDisabledReason }} <router-link v-if="!loading && !error && !editor && rooms.length === 0" :to="{ name: 'rooms' }">Open Rooms</router-link></p>
     </div>
-    <DestinationEditor v-if="editor" :rooms="editor.destination ? rooms : unlinked" :buildings="buildingList" :destination="editor.destination" :initial-room="editor.roomId" @close="editor = null" @saved="onSaved" />
+    <DestinationEditor v-if="editor" :rooms="editor.destination ? rooms : unlinked" :buildings="buildingList" :floors="floors" :destination="editor.destination" :initial-room="editor.roomId" @close="closeEditor" @saved="onSaved" />
     <p v-if="loading" class="muted">Loading destinations...</p>
-    <template v-else>
+    <template v-else-if="!editor">
       <section class="card dest-panel">
         <div class="panel-bar">
           <h2>Destinations List</h2>
@@ -167,7 +167,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, nextTick, onMounted, reactive, ref } from 'vue';
 import DestinationEditor from '@/components/DestinationEditor.vue';
 import { validatedRoute } from '@/lib/route-editor';
 import {
@@ -180,23 +180,38 @@ import {
   type MobileVisibility,
 } from '@/lib/destination-links';
 import { describeError } from '@/lib/errors';
-import { listBuildings, listDestinations, listRooms, setDestinationActive, setDestinationRoom } from '@/services/campus';
-import type { Building, DestinationRecord, Room } from '@/types';
+import { listBuildings, listDestinations, listFloors, listRooms, setDestinationActive, setDestinationRoom } from '@/services/campus';
+import type { Building, DestinationRecord, Floor, Room } from '@/types';
 
 const destinations = ref<DestinationRecord[]>([]);
 const rooms = ref<Room[]>([]);
 const buildingList = ref<Building[]>([]);
+const floors = ref<Floor[]>([]);
 const selection = reactive<Record<string, string>>({});
 const loading = ref(true);
 const busyId = ref<string | null>(null);
 const error = ref('');
 const notice = ref('');
 const editor = ref<{ destination?: DestinationRecord; roomId?: string } | null>(null);
-function openEditor(destination?: DestinationRecord, roomId?: string) { editor.value = { destination, roomId }; }
+let listScroll = 0;
+function contentScroller() { return document.querySelector<HTMLElement>('main.content'); }
+async function openEditor(destination?: DestinationRecord, roomId?: string) {
+  listScroll = contentScroller()?.scrollTop ?? window.scrollY;
+  editor.value = { destination, roomId };
+  await nextTick();
+  const content = contentScroller();
+  if (content) content.scrollTop = 0; else window.scrollTo(0, 0);
+}
+async function closeEditor() {
+  editor.value = null;
+  await nextTick();
+  const content = contentScroller();
+  if (content) content.scrollTop = listScroll; else window.scrollTo(0, listScroll);
+}
 function onSaved(saved: DestinationRecord) {
   if (destinations.value.some(d => d.id === saved.id)) replace(saved);
   else { destinations.value.push(saved); selection[saved.id] = saved.room_id ?? ''; }
-  editor.value = null;
+  void closeEditor();
   notice.value = 'Saved as an inactive draft. Verify the actual route before turning it on.';
 }
 const search = ref('');
@@ -259,7 +274,7 @@ async function load() {
   loading.value = true;
   error.value = '';
   try {
-    [destinations.value, rooms.value, buildingList.value] = await Promise.all([listDestinations(), listRooms(), listBuildings()]);
+    [destinations.value, rooms.value, buildingList.value, floors.value] = await Promise.all([listDestinations(), listRooms(), listBuildings(), listFloors()]);
     syncSelection();
   } catch (err) {
     error.value = describeError(err);

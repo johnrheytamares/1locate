@@ -27,16 +27,40 @@ export function destinationPayload(id: string, room: Room, building: Building, s
   };
 }
 
-/** Peak detector, not a native pedometer. A low crossing arms the next walking peak. */
+/** Conservative motion heuristic, not a native pedometer. Short walks may undercount.
+ * Complete pulses and sustained cadence reject isolated handling noise; rhythmic
+ * shaking can still resemble walking, so distances always need field review.
+ */
 export class WalkingPeaks {
-  private armed = true;
+  private low = false;
+  private pulse: number | null = null;
   private last = -Infinity;
+  private interval: number | null = null;
+  private streak = 0;
   sample(magnitude: number, time: number): boolean {
     if (!Number.isFinite(magnitude) || !Number.isFinite(time)) return false;
-    if (magnitude < 0.7) this.armed = true;
-    if (!this.armed || magnitude < 1.4 || time - this.last < 300) return false;
-    this.armed = false;
+    if (magnitude > 8) { this.reset(); return false; }
+    if (magnitude >= 1.4 && this.low && this.pulse === null) {
+      this.pulse = time; this.low = false;
+    }
+    if (magnitude >= 0.7) return false;
+    this.low = true;
+    if (this.pulse === null) return false;
+    const duration = time - this.pulse;
+    this.pulse = null;
+    if (duration < 60 || duration > 350) { this.reset(); return false; }
+    const gap = time - this.last;
+    if (gap < 350 || gap > 1100 || (this.interval !== null && Math.abs(gap - this.interval) > this.interval * 0.35)) {
+      this.streak = 1; this.interval = null;
+    } else {
+      this.streak++;
+      this.interval = this.interval === null ? gap : this.interval * 0.7 + gap * 0.3;
+    }
     this.last = time;
-    return true;
+    return this.streak >= 4;
+  }
+  private reset() {
+    this.low = false; this.pulse = null; this.last = -Infinity;
+    this.interval = null; this.streak = 0;
   }
 }

@@ -76,8 +76,8 @@ const query = ref('');
 
 
 const icons: Record<string, string> = {
-  'indoor-maps': '<svg viewBox="0 0 24 24"><path fill="currentColor" d="m3 5 6-2 6 2 6-2v16l-6 2-6-2-6 2V5zm7 .4v11.8l4 1.3V6.7l-4-1.3z"/></svg>',
   dashboard: '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M4 4h7v7H4V4zm9 0h7v4h-7V4zM4 13h7v7H4v-7zm9-3h7v10h-7V10z"/></svg>',
+  'outdoor-routes': '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M4 3h6v6H4V3zm10 12h6v6h-6v-6zM7 11h2v6h3v2H7v-8zm5-6h7v8h-2V7h-5V5z"/></svg>',
   buildings: '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M4 21V5l8-2 8 2v16h-6v-5H10v5H4zm4-9h2V9H8v3zm6 0h2V9h-2v3z"/></svg>',
   floors: '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M4 5h16v3H4V5zm0 5.5h16v3H4v-3zM4 16h16v3H4v-3z"/></svg>',
   rooms: '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M3 11 12 4l9 7v9h-6v-6H9v6H3v-9z"/></svg>',
@@ -89,9 +89,9 @@ const icons: Record<string, string> = {
 const items = computed(() => [
   { name: 'dashboard', label: 'Dashboard', group: 'Main' },
   { name: 'feedback', label: 'Navigation Feedback', group: 'Main' },
+  { name: 'outdoor-routes', label: 'Outdoor Walking Routes', group: 'Campus Management' },
   { name: 'buildings', label: 'Buildings', group: 'Campus Management' },
   { name: 'floors', label: 'Floors', group: 'Campus Management' },
-  { name: 'indoor-maps', label: 'Indoor Maps & Routes', group: 'Campus Management' },
   { name: 'rooms', label: 'Rooms', group: 'Campus Management' },
   { name: 'destinations', label: 'Destinations', group: 'Campus Management' },
   ...(session.isAdmin.value ? [{ name: 'roles', label: 'Roles', group: 'System Management' }] : []),

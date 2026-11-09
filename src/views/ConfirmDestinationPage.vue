@@ -3,13 +3,13 @@
     <ion-header>
       <ion-toolbar class="confirm-toolbar">
         <ion-buttons slot="start">
-          <ion-back-button default-href="/destinations" text="" color="dark" />
+          <ion-button class="header-back" aria-label="Back to destinations" data-test="back" @click="onBack"><ion-icon slot="icon-only" :icon="chevronBack" aria-hidden="true" /></ion-button>
         </ion-buttons>
         <ion-title><span class="confirm-brand"><img src="/images/1locate-logo.png" alt="" />Destination Details</span></ion-title>
       </ion-toolbar>
     </ion-header>
 
-    <ion-content class="confirm-content">
+    <ion-content class="confirm-content" :class="{ 'details-ready': state === 'ready' }">
       <p v-if="state === 'loading'" class="status" data-test="loading">Loading destination...</p>
 
       <section v-else-if="state === 'missing'" class="card missing" data-test="missing">
@@ -48,57 +48,50 @@
             </div>
           </div>
 
+          <p v-if="summary.description" class="description" data-test="description">{{ summary.description }}</p>
+
           <ul class="facts">
-            <li>
+            <li class="route-fact">
               <span class="fact-icon" aria-hidden="true"><ion-icon :icon="navigateOutline" /></span>
               <span class="fact-label">Route</span>
               <span class="fact-value">GPS to {{ summary.entranceName }}</span>
             </li>
-            <li>
+            <li class="steps-fact">
               <span class="fact-icon" aria-hidden="true"><ion-icon :icon="walkOutline" /></span>
               <span class="fact-label">Steps</span>
               <span class="fact-value">{{ destination.indoorRoute.length }} steps</span>
             </li>
-            <li>
+            <li class="distance-fact">
               <span class="fact-icon" aria-hidden="true"><ion-icon :icon="swapHorizontalOutline" /></span>
               <span class="fact-label">Distance</span>
               <span class="fact-value">{{ Number(summary.indoorMeters.toFixed(1)) }} m indoors</span>
             </li>
-            <li v-if="summary.floor">
+            <li v-if="summary.floor" class="floor-fact">
               <span class="fact-icon" aria-hidden="true"><ion-icon :icon="layersOutline" /></span>
               <span class="fact-label">Floor</span>
               <span class="fact-value" data-test="floor">{{ summary.floor }}</span>
             </li>
-            <li v-if="summary.roomNumber">
+            <li v-if="summary.roomNumber" class="room-fact">
               <span class="fact-icon" aria-hidden="true"><ion-icon :icon="businessOutline" /></span>
               <span class="fact-label">Room</span>
               <span class="fact-value" data-test="room-number">{{ summary.roomNumber }}</span>
             </li>
           </ul>
-          <p v-if="summary.description" class="description" data-test="description">{{ summary.description }}</p>
 
           <div class="source" :class="{ live: isLive }">
             <ion-icon :icon="isLive ? wifi : cloudOfflineOutline" aria-hidden="true" />
             <span>{{ sourceLabel }}.</span>
           </div>
-        </section>
-
-
-      </template>
-    </ion-content>
-    <ion-footer v-if="state === 'ready' && summary && destination" class="confirm-footer">
-        <div class="actions">
-          <ion-button v-if="destination.details?.roomId" expand="block" fill="outline" class="back" :router-link="{ path: '/indoor-map', query: { room: destination.details.roomId } }">Plan a floor-map route</ion-button>
+        <div class="actions" aria-label="Destination actions">
           <ion-button expand="block" class="start" data-test="start" @click="onStart">
             <ion-icon slot="start" :icon="paperPlaneOutline" aria-hidden="true" />
             View on Map
           </ion-button>
-          <ion-button expand="block" fill="outline" class="back" data-test="back" @click="onBack">
-            <ion-icon slot="start" :icon="chevronBack" aria-hidden="true" />
-            Back
-          </ion-button>
         </div>
-    </ion-footer>
+        </section>
+      </template>
+    </ion-content>
+
   </ion-page>
 </template>
 
@@ -106,12 +99,10 @@
 import { computed, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import {
-  IonBackButton,
   IonButton,
   IonButtons,
   IonContent,
   IonHeader,
-  IonFooter,
   IonIcon,
   IonPage,
   IonTitle,
@@ -442,12 +433,7 @@ function onBack() {
 </style>
 
 <style scoped>
-/* Keep the primary action visible inside Ionic's safe-area-aware page layout. */
-.confirm-footer { background: #f3f7fb; padding-bottom: env(safe-area-inset-bottom, 0px); box-shadow: 0 -4px 18px #102e5208; }
-.confirm-footer .actions { margin: 8px 16px; gap: 6px; grid-template-columns: 1fr 1fr; }
-.confirm-footer .actions .start { grid-column: 1 / -1; grid-row: 1; }
-.confirm-footer .actions ion-button { margin: 0; height: 40px; font-size: 13px; --border-radius: 12px; --color: #1d4ed8; }
-.confirm-footer .actions .start { --color: #fff; }
+/* Compact destination details with a safe-area-aware bottom action. */
 .gallery { margin: 8px 12px 0; gap: 8px; }
 .photo img, .placeholder { height: clamp(60px, 13dvh, 110px); max-height: 110px; aspect-ratio: auto; border-radius: 14px; }
 .photo figcaption { margin: 3px 4px; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -475,6 +461,46 @@ function onBack() {
   .photo figcaption { display: none; }
   .card { padding: 10px; }
   .facts { gap: 5px 10px; }
-  .confirm-footer .actions ion-button { height: 36px; }
 }
+</style>
+
+<style scoped>
+.confirm-toolbar .header-back { --color:#1d4ed8; margin-inline:4px; min-width:44px; min-height:44px; }
+.confirm-content.details-ready::part(scroll) { display:flex; flex-direction:column; }
+.confirm-content.details-ready .gallery, .confirm-content.details-ready .card { flex-shrink:0; }
+.actions { display:block; flex-shrink:0; margin:auto 12px 0; padding-top:16px; padding-bottom:max(20px,var(--ion-safe-area-bottom,env(safe-area-inset-bottom,0px))); }
+.actions .start { width:100%; margin:0; min-height:46px; font-size:14px; --border-radius:12px; --background:#1d4ed8; --color:#fff; }
+</style>
+
+<style scoped>
+/* Photo-led destination sheet: the details and primary action stay together. */
+.confirm-toolbar { --background:#f3f7fb; --min-height:60px; }
+.confirm-toolbar .header-back { --background:#e8f0ff; --border-radius:12px; margin-inline:8px; }
+.confirm-content.details-ready::part(scroll) { display:block; }
+.gallery { margin:0 auto; gap:0; max-width:720px; scroll-snap-type:x mandatory; }
+.photo { flex:0 0 100%; }
+.photo img,.placeholder { height:clamp(220px,35dvh,380px); max-height:none; width:100%; border-radius:0; aspect-ratio:auto; }
+.placeholder { min-height:220px; font-size:14px; }
+.placeholder ion-icon { font-size:42px; }
+.photo figcaption { margin:0; padding:6px 16px 30px; background:#e8f1fb; white-space:normal; font-size:12px; }
+.card:not(.missing) { width:100%; max-width:720px; margin:-22px auto 0; padding:22px 20px max(20px,var(--ion-safe-area-bottom,env(safe-area-inset-bottom,0px))); border-radius:30px 30px 0 0; box-shadow:0 -6px 24px #163f6410; overflow:hidden; }
+.eyebrow { font-size:13px; margin:0 0 12px; }
+.identity { gap:14px; border:0; padding:0; }
+.dest-icon { width:54px; height:54px; font-size:29px; background:#e8f0ff; }
+.card h1 { font-size:28px; line-height:1.2; letter-spacing:-.02em; }
+.building { font-size:14px; margin-top:3px; }
+.description { display:block; margin:16px 0 0; padding:11px 14px; border-radius:14px; background:#f0f5fa; color:#35516c; font-size:13px; line-height:1.5; overflow:visible; }
+.facts { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0; margin:16px 0 0; padding:0; border-top:1px solid #e6edf5; border-bottom:1px solid #e6edf5; }
+.facts li,.facts li:first-child { grid-column:auto; grid-template-columns:36px minmax(0,1fr); gap:2px 9px; padding:13px 8px; border-bottom:1px solid #e6edf5; align-content:start; min-width:0; }
+.facts .route-fact { order:1; } .facts .distance-fact { order:2; } .facts .steps-fact { order:3; } .facts .room-fact { order:4; } .facts .floor-fact { order:5; }
+.fact-icon { width:36px; height:36px; border-radius:12px; font-size:22px; grid-column:1; grid-row:1 / 3; }
+.fact-label { grid-column:2; font-size:12px; line-height:1.2; }
+.fact-value,.facts li:first-child .fact-value { grid-column:2; font-size:14px; line-height:1.3; }
+.source { margin:14px 0 0; padding:12px 14px; border:0; border-radius:14px; background:#eef2f6; font-size:12px; line-height:1.4; }
+.source.live { background:#e7f8e9; color:#14763a; }
+.source ion-icon { font-size:21px; flex-shrink:0; }
+.actions { display:block; margin:16px 0 0; padding:16px 0 0; border-top:1px solid #e6edf5; }
+.actions .start { height:50px; min-height:50px; font-size:15px; --border-radius:15px; --background:linear-gradient(125deg,#1f5df4,#123cce); --box-shadow:0 5px 14px #1d4ed824; }
+@media (max-width:350px) { .card:not(.missing) { padding-inline:14px; } .facts li,.facts li:first-child { grid-template-columns:28px minmax(0,1fr); gap:2px 6px; padding-inline:4px; } .fact-icon { width:28px; height:30px; font-size:18px; } .fact-value,.facts li:first-child .fact-value { font-size:12px; } }
+@media (max-height:650px) { .photo img,.placeholder { height:180px; min-height:180px; } .card:not(.missing) { padding-top:18px; } }
 </style>

@@ -6,9 +6,9 @@ import ConfirmDestinationPage from '../views/ConfirmDestinationPage.vue'
 import ARNavigationPage from '../views/ARNavigationPage.vue'
 
 const routes: Array<RouteRecordRaw> = [
+  { path: '/indoor-map', redirect: '/destinations' },
   { path: '/destinations/:id/preview', name: 'NavigationPreview', component: () => import('../views/NavigationPreviewPage.vue') },
   { path: '/arrival', name: 'Arrival', component: () => import('../views/ArrivalPage.vue') },
-  { path: '/indoor-map', name: 'IndoorMap', component: () => import('../views/IndoorMapPage.vue') },
   {
     path: '/',
     redirect: '/home'

@@ -42,7 +42,6 @@
 
     <ion-content class="picker-content">
       <p v-if="voiceMessage" class="voice-status" role="status" data-test="voice-status">{{ voiceMessage }}</p>
-      <ion-button class="map-routes" fill="outline" router-link="/indoor-map">Explore floor-map routes</ion-button>
       <div class="source-banner" :class="{ live: isLive }">
         <ion-icon :icon="isLive ? wifi : cloudOfflineOutline" aria-hidden="true" />
         <p class="source" data-test="source">{{ sourceLabel }}</p>
@@ -530,7 +529,6 @@ function onSelect(id: string) {
   .voice-status { max-width: 520px; margin-left: auto; margin-right: auto; }
 }
 .header-logo { width: 30px; height: 34px; object-fit: contain; flex-shrink: 0; }
-.map-routes { display: block; margin: 10px 12px; --color: #1d4ed8; --border-color: #c4d7ef; --border-radius: 10px; font-size: 12px; text-transform: none; min-height: 44px; }
 </style>
 
 <style scoped>.category-filters { display: flex; gap: 8px; overflow-x: auto; padding: 8px 16px; }.category-filters button { background: white; color: #25445f; border: 1px solid #d5e2ee; padding: 10px 16px; border-radius: 12px; font-weight: 700; }.category-filters .selected { background: #1d4ed8; color: white; border-color: #1d4ed8; }</style>

@@ -1,5 +1,9 @@
 # Indoor maps and routing (Phase 4C)
 
+> Retired from the mobile and admin app navigation on 2026-11-09. Floor-plan entry points
+> and editor access have been removed. The implementation and existing database data are retained
+> for compatibility; the workflow below is historical. Use saved camera routes for indoor guidance.
+
 Implemented locally on 2026-11-03. This is map-based guidance alongside the existing camera/fixed-route navigator.
 It does not provide continuous indoor positioning or automatic rerouting from an unknown location.
 

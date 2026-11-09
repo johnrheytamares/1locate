@@ -42,3 +42,16 @@ test('clears a watcher that finishes starting after leaving the preview', async 
   await flushPromises();
   expect(mocks.clear).toHaveBeenCalledWith({ id: 'late-preview-watch' });
 });
+
+
+test('shows the school map as a reference even before walkways or GPS calibration exist', async () => {
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ version: 1, verified: false, nodes: [], edges: [], referenceMap: { image: 'data:image/png;base64,AAAA', anchors: [] } }) }));
+  const wrapper = mount(DestinationMapPreview, { props: { entrance } });
+  await flushPromises();
+  expect(wrapper.text()).toContain('School campus map');
+  expect(wrapper.text()).toContain('School reference image only');
+  expect(wrapper.find('img[alt="Campus infrastructure reference map"]').exists()).toBe(true);
+  expect(wrapper.find('.pin.user').exists()).toBe(false);
+  expect(wrapper.find('.active-route').exists()).toBe(false);
+  wrapper.unmount();
+});

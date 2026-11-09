@@ -31,9 +31,10 @@ const routes: RouteRecordRaw[] = [
     meta: { requires: 'content' },
     children: [
       { path: '', name: 'dashboard', component: () => import('@/views/DashboardView.vue'), meta: { requires: 'content' } },
+      { path: 'outdoor-routes', name: 'outdoor-routes', component: () => import('@/views/OutdoorRoutesView.vue'), meta: { requires: 'content' } },
+      { path: 'indoor-maps', redirect: { name: 'buildings' } },
       { path: 'buildings', name: 'buildings', component: () => import('@/views/BuildingsView.vue'), meta: { requires: 'content' } },
       { path: 'floors', name: 'floors', component: () => import('@/views/FloorsView.vue'), meta: { requires: 'content' } },
-      { path: 'indoor-maps', name: 'indoor-maps', component: () => import('@/views/IndoorMapsView.vue'), meta: { requires: 'content' } },
       { path: 'rooms', name: 'rooms', component: () => import('@/views/RoomsView.vue'), meta: { requires: 'content' } },
       { path: 'destinations', name: 'destinations', component: () => import('@/views/DestinationsView.vue'), meta: { requires: 'content' } },
       { path: 'navigation-feedback', name: 'feedback', component: () => import('@/views/FeedbackView.vue'), meta: { requires: 'content' } },

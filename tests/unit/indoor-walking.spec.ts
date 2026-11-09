@@ -1,4 +1,15 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+// Each test starts with empty browser storage, including Node versions with native localStorage.
+beforeEach(() => {
+  const saved = new Map<string, string>();
+  vi.stubGlobal('localStorage', {
+    getItem: (key: string) => saved.get(key) ?? null,
+    setItem: (key: string, value: string) => { saved.set(key, value); },
+    removeItem: (key: string) => { saved.delete(key); },
+    clear: () => saved.clear(),
+  });
+});
 import { createTestNavigation, moveForward, remainingMeters, setForwardHeading } from '../../src/services/navigation.service';
 import { calibratedStepLength, STREAK_TO_CONFIRM, useIndoorWalking, WalkingPeaks } from '../../src/composables/useIndoorWalking';
 

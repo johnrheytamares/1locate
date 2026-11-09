@@ -1,23 +1,29 @@
 <template>
   <section class="map-preview" :class="{ fullscreen }" aria-label="Satellite destination preview">
-    <div class="map-heading"><strong>Destination preview</strong><button :disabled="!mapReady" @click="recenter">Recenter</button></div>
-    <div ref="container" class="map-canvas" aria-label="Satellite map with your location and building entrance" />
+    <div class="map-heading"><strong>{{ showSchoolMap && schoolMap ? 'School campus map' : 'Destination preview' }}</strong><button :disabled="!mapReady && !(showSchoolMap && schoolMap)" @click="recenter">Recenter</button></div>
+    <div v-if="showSchoolMap && schoolMap" ref="schoolContainer" class="school-map-canvas"><div class="school-map-frame" :style="{ width: `${schoolZoom * 100}%` }"><CampusMapCanvas :map="schoolMap" :route="walkingRoute?.source === 'campus' ? walkingRoute.coordinates : undefined" :nodes="schoolNodes" :user="schoolMapVerified ? fix : null" /></div></div>
+    <div v-show="!showSchoolMap || !schoolMap" ref="container" class="map-canvas" aria-label="Satellite map with your location and building entrance" />
     <div class="map-status">
-    <p class="legend"><span class="user-dot">●</span> Your location <span class="entrance-dot">●</span> Building entrance</p>
-    <p v-if="mapMessage" role="status">{{ mapMessage }}</p>
+    <p v-if="!(showSchoolMap && schoolMap)" class="legend"><span class="user-dot">●</span> Your location <span class="entrance-dot">●</span> Building entrance</p>
+    <p v-if="mapMessage && !(showSchoolMap && schoolMap)" role="status">{{ mapMessage }}</p>
     <p role="status">{{ locationMessage }}</p>
     <p v-if="!target">Entrance coordinates are not set. Ask the campus administrator to verify this entrance.</p>
     <p v-if="fix">GPS accuracy: ±{{ Math.round(fix.accuracy) }} m. The pin is an estimate.</p>
-    <div class="map-actions"><button v-if="mapMessage" @click="retryMap">Retry map</button><button @click="locate">Update my location</button></div>
-    <p v-if="fullscreen" role="status">{{ routeMessage }}</p>
-    <p v-if="fullscreen" class="route-credit">Walking routes: <a href="https://routing.openstreetmap.de/about.html" target="_blank" rel="noopener noreferrer">FOSSGIS / OpenStreetMap</a> · <a href="https://www.openstreetmap.org/fixthemap" target="_blank" rel="noopener noreferrer">Fix the map</a></p>
+    <div class="map-actions"><template v-if="showSchoolMap && schoolMap"><button :disabled="schoolZoom >= 4" @click="schoolZoom = Math.min(4, schoolZoom + 0.5)">Zoom +</button><button :disabled="schoolZoom <= 1" @click="schoolZoom = Math.max(1, schoolZoom - 0.5)">Zoom -</button></template><button v-if="schoolMap" @click="showSchoolMap = !showSchoolMap">{{ showSchoolMap ? 'Satellite view' : 'School map' }}</button><button v-if="mapMessage" @click="retryMap">Retry map</button><button v-if="!external" @click="locate">Update my location</button></div>
+    <p v-if="showSchoolMap && schoolMap && (!schoolMapVerified || walkingRoute?.source !== 'campus')" role="status">School reference image only. Switch to Satellite view for GPS and any available walking route.</p>
+    <p v-else-if="fullscreen" role="status">{{ routeMessage }}</p>
+    <p v-if="fullscreen && walkingRoute?.source !== 'campus'" class="route-credit">Walking routes: <a href="https://routing.openstreetmap.de/about.html" target="_blank" rel="noopener noreferrer">FOSSGIS / OpenStreetMap</a> · <a href="https://www.openstreetmap.org/fixthemap" target="_blank" rel="noopener noreferrer">Fix the map</a></p>
     <p class="map-note">Outdoor entrance preview. Indoor guidance starts after entrance confirmation.</p>
     </div>
   </section>
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { parseOutdoorGraph } from '../../shared/outdoor-graph';
+import type { CampusMap } from '../../shared/campus-map';
+import { gpsToImage } from '../../shared/campus-map';
+import CampusMapCanvas from '../../shared/CampusMapCanvas.vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { Geolocation } from '@capacitor/geolocation';
 import { App } from '@capacitor/app';
 import type { PluginListenerHandle } from '@capacitor/core';
@@ -26,13 +32,22 @@ import type { OutdoorTarget } from '@/models/navigation';
 import type { UserLocation } from '@/models/location';
 import { checkPermission, requestPermission, toLocationError, toUserLocation } from '@/services/location.service';
 import { calculateDistance, destinationPoint } from '@/services/geo.service';
-import { fetchWalkingRoute, type WalkingRoute } from '@/services/walking-route.service';
+import { fetchOutdoorRoute, type OutdoorWalkingRoute } from '@/services/outdoor-route.service';
+import type { WalkingRoute } from '@/services/walking-route.service';
 import { surveyedTarget } from '@/services/outdoor-navigation.service';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
-const props = defineProps<{ entrance: OutdoorTarget; fullscreen?: boolean }>();
+const props = defineProps<{ entrance: OutdoorTarget; fullscreen?: boolean; external?: boolean; liveLocation?: UserLocation | null; liveRoute?: OutdoorWalkingRoute | null }>();
 const emit = defineEmits<{ location: [value: UserLocation]; route: [value: WalkingRoute | null] }>();
-const walkingRoute = ref<WalkingRoute | null>(null);
+const showSchoolMap = ref(true);
+const schoolZoom = ref(1);
+const referenceMap = ref<CampusMap | null>(null);
+const referenceVerified = ref(false);
+const schoolMap = computed(() => walkingRoute.value?.referenceMap ?? referenceMap.value);
+const schoolMapVerified = computed(() => !!walkingRoute.value?.referenceMap || referenceVerified.value);
+const schoolNodes = computed(() => schoolMapVerified.value && target.value ? [{ ...target.value, id: 'entrance', entrance: true }] : []);
+const schoolContainer = ref<HTMLDivElement>();
+const walkingRoute = ref<OutdoorWalkingRoute | null>(null);
 const routeMessage = ref('Waiting for GPS to find a walking route.');
 let routeAbort: AbortController | undefined;
 let lastRouteAt = 0;
@@ -51,8 +66,8 @@ function renderRoute() {
 }
 
 async function updateRoute() {
-  if (!props.fullscreen || !target.value || !fix.value) return;
-  if (fix.value.accuracy > 60) { routeMessage.value = 'Waiting for more accurate GPS to plan a walking route.'; return; }
+  if (props.external || !props.fullscreen || !target.value || !fix.value) return;
+  if (fix.value.accuracy > 20) { routeMessage.value = 'Waiting for more accurate GPS to plan a walking route.'; return; }
   const now = Date.now();
   if (lastRouteAt && now - lastRouteAt < 15000) return;
   if (walkingRoute.value && lastRouteStart && calculateDistance(lastRouteStart.latitude, lastRouteStart.longitude, fix.value.latitude, fix.value.longitude) < 30) return;
@@ -64,11 +79,11 @@ async function updateRoute() {
   routeMessage.value = 'Finding a walking route…';
   const timeout = setTimeout(() => controller.abort(), 12000);
   try {
-    const result = await fetchWalkingRoute(start, target.value, controller.signal);
+    const result = await fetchOutdoorRoute(start, target.value, controller.signal);
     if (disposed || controller !== routeAbort || controller.signal.aborted) return;
     walkingRoute.value = result; lastRouteStart = start;
     emit('route', result); renderRoute(); recenter();
-    routeMessage.value = 'Follow the blue walking path. Check access and crossings on site; campus paths may be unmapped.';
+    routeMessage.value = result.source === 'campus' ? 'Campus walking route. Check access and crossings on site.' : 'OpenStreetMap walking route. Campus paths and access may be incomplete.';
   } catch {
     if (!disposed && controller === routeAbort) routeMessage.value = 'Walking route unavailable. Check your connection or try Update my location. No path has been inferred.';
   } finally { clearTimeout(timeout); }
@@ -90,6 +105,12 @@ let appHandle: PluginListenerHandle | undefined;
 let resize: ResizeObserver | undefined;
 
 function recenter() {
+  if (showSchoolMap.value && schoolMap.value && schoolContainer.value) {
+    const canvas = schoolContainer.value;
+    const point = fix.value && schoolMapVerified.value ? gpsToImage(schoolMap.value, fix.value) : null;
+    canvas.scrollTo({ left: Math.max(0, (point?.x ?? 0.5) * canvas.scrollWidth - canvas.clientWidth / 2), top: Math.max(0, (point?.y ?? 0.5) * canvas.scrollHeight - canvas.clientHeight / 2) });
+    return;
+  }
   if (!map) return;
   const points: [number, number][] = [];
   if (target.value) points.push([target.value.longitude, target.value.latitude]);
@@ -198,16 +219,42 @@ async function retryMap() {
   }
 }
 
+watch(() => props.liveLocation, location => {
+  if (!props.external) return;
+  fix.value = location ?? null;
+  locationMessage.value = location ? 'Location shared with camera guidance.' : 'Waiting for GPS.';
+  renderLocation();
+}, { immediate: true });
+watch(() => props.liveRoute, route => {
+  if (!props.external) return;
+  walkingRoute.value = route ?? null;
+  routeMessage.value = route ? (route.source === 'campus' ? 'Campus walking route.' : 'OpenStreetMap walking route; verify access on site.') : 'No walking route is available.';
+  renderRoute();
+}, { immediate: true });
+
+let referenceAbort: AbortController | undefined;
+async function loadReferenceMap() {
+  const controller = new AbortController(); referenceAbort = controller;
+  const timeout = setTimeout(() => controller.abort(), 12000);
+  try {
+    const response = await fetch(`${import.meta.env.BASE_URL}campus-walking-network.json`, { signal: controller.signal });
+    if (!response.ok) return;
+    const graph = parseOutdoorGraph(await response.json());
+    if (!disposed && !controller.signal.aborted) { referenceMap.value = graph.referenceMap ?? null; referenceVerified.value = graph.verified; }
+  } catch { /* Reference image is optional; route errors are reported by the route session. */ }
+  finally { clearTimeout(timeout); }
+}
 onMounted(() => {
-  void retryMap(); void locate();
+  void loadReferenceMap();
+  void retryMap(); if (!props.external) void locate();
   resize = new ResizeObserver(() => map?.resize());
   if (container.value) resize.observe(container.value);
-  void App.addListener('appStateChange', ({ isActive }) => {
+  if (!props.external) void App.addListener('appStateChange', ({ isActive }) => {
     if (isActive) { fix.value = null; fittedUser = false; userMarker?.remove(); userMarker = undefined; void locate(); }
     else { void stopLocation(); locationMessage.value = 'Location paused while app is in the background.'; }
   }).then(handle => { if (disposed) void handle.remove(); else appHandle = handle; });
 });
-onBeforeUnmount(() => { disposed = true; void stopLocation(); void appHandle?.remove(); resize?.disconnect(); map?.remove(); });
+onBeforeUnmount(() => { referenceAbort?.abort(); disposed = true; void stopLocation(); void appHandle?.remove(); resize?.disconnect(); map?.remove(); });
 defineExpose({ stopLocation });
 </script>
 
@@ -216,6 +263,10 @@ defineExpose({ stopLocation });
 .map-heading { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; }
 button { border-radius: 9px; padding: 9px 12px; background: #e8f1fb; color: #1d4ed8; font-weight: 600; }
 button:disabled { opacity: .5; }
+.school-map-canvas { overflow:auto; min-height:200px; background:#e8eff7; }
+.school-map-frame { min-width:100%; }
+.map-actions { flex-wrap:wrap; }
+.fullscreen .school-map-canvas { flex:1; }
 .map-canvas { height: clamp(250px, 38dvh, 420px); width: 100%; background: #dce5ed; }
 p { margin: 8px 12px; font-size: 12px; line-height: 1.4; }
 .legend { display: flex; align-items: center; gap: 7px; }

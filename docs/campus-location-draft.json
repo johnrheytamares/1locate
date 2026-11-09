@@ -1,0 +1,355 @@
+{
+  "version": 1,
+  "status": "draft",
+  "coordinateSource": "User-provided DMS coordinates; not independently field-verified",
+  "coordinatePrecision": "Source seconds are supplied to 0.1 arcsecond; decimal places reflect conversion only, not GPS accuracy.",
+  "locations": [
+    {
+      "id": "main-entrance",
+      "name": "Main Entrance",
+      "kind": "campus_entrance",
+      "imageGroup": null,
+      "marker": null,
+      "floor": null,
+      "latitude": 13.38636111,
+      "longitude": 121.16330556,
+      "sourceDms": {
+        "latitude": [
+          13,
+          23,
+          10.9,
+          "N"
+        ],
+        "longitude": [
+          121,
+          9,
+          47.9,
+          "E"
+        ]
+      }
+    },
+    {
+      "id": "itrm-108",
+      "name": "ITRM_108",
+      "kind": "room",
+      "imageGroup": "image_1",
+      "marker": "black",
+      "floor": null,
+      "latitude": 13.38788889,
+      "longitude": 121.16222222,
+      "sourceDms": {
+        "latitude": [
+          13,
+          23,
+          16.4,
+          "N"
+        ],
+        "longitude": [
+          121,
+          9,
+          44.0,
+          "E"
+        ]
+      }
+    },
+    {
+      "id": "itrm-107",
+      "name": "ITRM_107",
+      "kind": "room",
+      "imageGroup": "image_1",
+      "marker": "white",
+      "floor": null,
+      "latitude": 13.38791667,
+      "longitude": 121.16222222,
+      "sourceDms": {
+        "latitude": [
+          13,
+          23,
+          16.5,
+          "N"
+        ],
+        "longitude": [
+          121,
+          9,
+          44.0,
+          "E"
+        ]
+      }
+    },
+    {
+      "id": "itrm-106",
+      "name": "ITRM_106",
+      "kind": "room",
+      "imageGroup": "image_1",
+      "marker": "red",
+      "floor": null,
+      "latitude": 13.38797222,
+      "longitude": 121.16211111,
+      "sourceDms": {
+        "latitude": [
+          13,
+          23,
+          16.7,
+          "N"
+        ],
+        "longitude": [
+          121,
+          9,
+          43.6,
+          "E"
+        ]
+      }
+    },
+    {
+      "id": "itrm-101",
+      "name": "ITRM_101",
+      "kind": "room",
+      "imageGroup": "image_2",
+      "marker": "white",
+      "floor": null,
+      "latitude": 13.38797222,
+      "longitude": 121.16172222,
+      "sourceDms": {
+        "latitude": [
+          13,
+          23,
+          16.7,
+          "N"
+        ],
+        "longitude": [
+          121,
+          9,
+          42.2,
+          "E"
+        ]
+      }
+    },
+    {
+      "id": "itrm-102",
+      "name": "ITRM_102",
+      "kind": "room",
+      "imageGroup": "image_2",
+      "marker": "dark blue",
+      "floor": null,
+      "latitude": 13.388,
+      "longitude": 121.16175,
+      "sourceDms": {
+        "latitude": [
+          13,
+          23,
+          16.8,
+          "N"
+        ],
+        "longitude": [
+          121,
+          9,
+          42.3,
+          "E"
+        ]
+      }
+    },
+    {
+      "id": "faculty-office",
+      "name": "Faculty Office",
+      "kind": "office",
+      "imageGroup": "image_2",
+      "marker": "pink",
+      "floor": null,
+      "latitude": 13.38808333,
+      "longitude": 121.16177778,
+      "sourceDms": {
+        "latitude": [
+          13,
+          23,
+          17.1,
+          "N"
+        ],
+        "longitude": [
+          121,
+          9,
+          42.4,
+          "E"
+        ]
+      }
+    },
+    {
+      "id": "it-building-entrance",
+      "name": "IT Building Entrance",
+      "kind": "building_entrance",
+      "imageGroup": "image_3",
+      "marker": "blue (outside)",
+      "floor": null,
+      "latitude": 13.38822222,
+      "longitude": 121.16169444,
+      "sourceDms": {
+        "latitude": [
+          13,
+          23,
+          17.6,
+          "N"
+        ],
+        "longitude": [
+          121,
+          9,
+          42.1,
+          "E"
+        ]
+      }
+    },
+    {
+      "id": "itrm-104",
+      "name": "ITRM_104",
+      "kind": "room",
+      "imageGroup": "image_3",
+      "marker": "white",
+      "floor": "Ground Floor",
+      "latitude": 13.38819444,
+      "longitude": 121.16172222,
+      "sourceDms": {
+        "latitude": [
+          13,
+          23,
+          17.5,
+          "N"
+        ],
+        "longitude": [
+          121,
+          9,
+          42.2,
+          "E"
+        ]
+      }
+    },
+    {
+      "id": "csg-office",
+      "name": "CSG Office",
+      "kind": "office",
+      "imageGroup": "image_3",
+      "marker": "pink",
+      "floor": "Ground Floor",
+      "latitude": 13.38819444,
+      "longitude": 121.16166667,
+      "sourceDms": {
+        "latitude": [
+          13,
+          23,
+          17.5,
+          "N"
+        ],
+        "longitude": [
+          121,
+          9,
+          42.0,
+          "E"
+        ]
+      }
+    },
+    {
+      "id": "itrm-105",
+      "name": "ITRM_105",
+      "kind": "room",
+      "imageGroup": "image_3",
+      "marker": "red",
+      "floor": "Ground Floor",
+      "latitude": 13.38822222,
+      "longitude": 121.16163889,
+      "sourceDms": {
+        "latitude": [
+          13,
+          23,
+          17.6,
+          "N"
+        ],
+        "longitude": [
+          121,
+          9,
+          41.9,
+          "E"
+        ]
+      }
+    },
+    {
+      "id": "itrm-202",
+      "name": "ITRM_202",
+      "kind": "room",
+      "imageGroup": "image_3",
+      "marker": "black",
+      "floor": "Second Floor",
+      "latitude": 13.38819444,
+      "longitude": 121.16163889,
+      "sourceDms": {
+        "latitude": [
+          13,
+          23,
+          17.5,
+          "N"
+        ],
+        "longitude": [
+          121,
+          9,
+          41.9,
+          "E"
+        ]
+      }
+    },
+    {
+      "id": "itrm-201",
+      "name": "ITRM-201",
+      "kind": "room",
+      "imageGroup": "image_3",
+      "marker": "blue",
+      "floor": "Second Floor",
+      "latitude": 13.38816667,
+      "longitude": 121.16172222,
+      "sourceDms": {
+        "latitude": [
+          13,
+          23,
+          17.4,
+          "N"
+        ],
+        "longitude": [
+          121,
+          9,
+          42.2,
+          "E"
+        ]
+      }
+    },
+    {
+      "id": "it-stairs",
+      "name": "IT Building Stairs",
+      "kind": "stairs",
+      "imageGroup": "image_3",
+      "marker": "orange",
+      "floor": null,
+      "latitude": 13.38816667,
+      "longitude": 121.16166667,
+      "sourceDms": {
+        "latitude": [
+          13,
+          23,
+          17.4,
+          "N"
+        ],
+        "longitude": [
+          121,
+          9,
+          42.0,
+          "E"
+        ]
+      }
+    }
+  ],
+  "routing": {
+    "verified": false,
+    "pathwaysConnectedAsConfirmedByUser": true,
+    "edges": [],
+    "missing": [
+      "GPS points for each pathway bend and junction",
+      "Measured walking distances for each connection",
+      "Door/access-point links for rooms in image_1 and image_2",
+      "Indoor stairs/landing route measurements and floor transitions"
+    ]
+  }
+}
