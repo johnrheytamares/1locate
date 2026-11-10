@@ -128,7 +128,7 @@ describe('indoor route progress', () => {
     const route = loadSelectedRoute()!;
     expect(updateRouteProgress(route, 2).walkedMeters).toBe(0);
     expect(advanceInstruction(route).walkedMeters).toBe(0);
-    expect(navigationInstruction(route, 0)).toBe(CALIBRATION_INSTRUCTION);
+    expect(navigationInstruction(route, 0)).toBe('Turn right ahead');
   });
 });
 
@@ -178,7 +178,7 @@ describe('"I lost my way"', () => {
     expect(restarted.forwardHeading).toBeNull();
     expect(restarted.paused).toBe(false);
     expect(restarted.destinationId).toBe('registrar');
-    expect(navigationInstruction(restarted, 90)).toBe(CALIBRATION_INSTRUCTION);
+    expect(navigationInstruction(restarted, 90)).toBe('Turn right ahead');
     expect(updateRouteProgress(restarted, 2).walkedMeters).toBe(0);
     expect(updateRouteProgress(setForwardHeading(restarted, 10), 2).walkedMeters).toBe(2);
   });
@@ -360,7 +360,7 @@ describe('Camera Navigation distance', () => {
   const moveForwardButton = () => wrapper!.find('[data-test="move-forward"]');
   const distance = () => wrapper!.find('[data-test="journey-distance"]').text();
 
-  test('turning the phone at a turn changes the direction but not the remaining distance', async () => {
+  test('rotating the phone does not confirm an indoor junction; explicit turn confirmation preserves remaining distance', async () => {
     await enterIndoorDev();
     for (let index = 0; index < 3; index += 1) await moveForwardButton().trigger('click');
     expect(distance()).toBe('Est. remaining: 4 m');
@@ -369,6 +369,11 @@ describe('Camera Navigation distance', () => {
     await flushPromises();
     await new Promise((resolve) => setTimeout(resolve, TURN_ALIGNMENT_HOLD_MS + 100));
     await flushPromises();
+    expect(wrapper!.find('.journey-instruction strong').text()).toBe('Turn right ahead');
+    await moveForwardButton().trigger('click');
+    expect(distance()).toBe('Est. remaining: 4 m');
+    const turn=wrapper!.findAll('ion-button').find(b=>b.text().trim()==='I completed the turn');
+    expect(turn).toBeDefined();await turn!.trigger('click');
     expect(wrapper!.find('.journey-instruction strong').text()).toBe('Continue straight');
     expect(distance()).toBe('Est. remaining: 4 m');
 
@@ -389,8 +394,11 @@ describe('Camera Navigation distance', () => {
     mocks.heading?.(180);
     await flushPromises();
     await new Promise((resolve) => setTimeout(resolve, TURN_ALIGNMENT_HOLD_MS + 100));
+    await wrapper!.findAll('ion-button').find(b=>b.text().trim()==='I completed the turn')!.trigger('click');
     for (let index = 0; index < 4; index += 1) await moveForwardButton().trigger('click');
     await flushPromises();
+    expect(wrapper!.findAllComponents(IonAlert).some(alert=>alert.props('isOpen')&&alert.props('header')==='TEST route complete')).toBe(false);
+    await wrapper!.find('.route-complete ion-button').trigger('click');await flushPromises();
     const arrival = wrapper!.findAllComponents(IonAlert).find((alert) => alert.props('isOpen') && alert.props('header') === 'TEST route complete');
     expect(arrival).toBeDefined();
     expect(arrival!.props('message')).toContain('cannot confirm you are at the room');
@@ -420,6 +428,8 @@ describe('Camera Navigation distance', () => {
     }
 
     expect(feedback().exists()).toBe(false);
+    expect(wrapper!.find('.route-complete').exists()).toBe(true);
+    await wrapper!.find('.route-complete ion-button').trigger('click');await flushPromises();
     const arrival = wrapper!.findAllComponents(IonAlert).find((alert) => alert.props('isOpen') && alert.props('header') === 'Confirm destination')!;
     expect(arrival).toBeDefined();
     arrival.vm.$emit('didDismiss', new CustomEvent('ionAlertDidDismiss', { detail: { role: 'confirm' } }));
@@ -575,7 +585,7 @@ describe('Camera Navigation in a release build', () => {
     expect(wrapper!.text()).not.toContain('Arrival Trigger');
     mocks.heading?.(180);
     await flushPromises();
-    expect(wrapper!.find('.journey-instruction').text()).toContain('face the path');
+    expect(wrapper!.find('.journey-instruction').text()).toContain('Turn right ahead');
     vi.unstubAllGlobals();
   });
 });

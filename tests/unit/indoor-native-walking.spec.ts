@@ -1,7 +1,7 @@
 import {beforeEach,afterEach,expect,test,vi} from 'vitest';
 const mocks=vi.hoisted(()=>({start:vi.fn(),stop:vi.fn()}));
 vi.mock('@capacitor/core',()=>({Capacitor:{isNativePlatform:()=>true}}));
-vi.mock('../../shared/indoor-step-source',()=>({IndoorStepSource:class {start=mocks.start;stop=mocks.stop;}}));
+vi.mock('../../src/services/indoor-steps',()=>({IndoorStepSource:class {start=mocks.start;stop=mocks.stop;}}));
 import {useIndoorWalking} from '../../src/composables/useIndoorWalking';
 beforeEach(()=>{vi.clearAllMocks();vi.stubGlobal('localStorage',{getItem:()=>null,setItem:vi.fn()});mocks.stop.mockResolvedValue(undefined);mocks.start.mockResolvedValue('hardware-detector');});
 afterEach(()=>vi.unstubAllGlobals());

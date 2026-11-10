@@ -71,27 +71,27 @@ describe('heading math', () => {
 });
 
 describe('indoor compass calibration', () => {
-  test('asks for Set Forward before any facing instruction', () => {
+  test('shows written route instructions without pretending compass calibration verifies the corridor', () => {
     const state = createTestNavigation();
     expect(navigationInstruction(state, 90)).toBe(
-      'Point your phone toward the path and tap Set Forward.',
+      'Turn right ahead',
     );
     expect(requiredHeading(state)).toBeNull();
   });
 
-  test('keeps route instructions inside the facing tolerance', () => {
+  test('keeps written route instructions stable across compass offsets', () => {
     const state = setForwardHeading(turnRoute(), 80);
     expect(requiredHeading(state)).toBe(80);
     expect(navigationInstruction(state, 80 + FACING_TOLERANCE_DEGREES)).toBe('Follow the blue path');
-    expect(navigationInstruction(state, 80 - FACING_TOLERANCE_DEGREES - 1)).toBe('Turn right to face the path');
-    expect(navigationInstruction(state, 80 + FACING_TOLERANCE_DEGREES + 1)).toBe('Turn left to face the path');
+    expect(navigationInstruction(state, 80 - FACING_TOLERANCE_DEGREES - 1)).toBe('Follow the blue path');
+    expect(navigationInstruction(state, 80 + FACING_TOLERANCE_DEGREES + 1)).toBe('Follow the blue path');
   });
 
   test('adds 90 degrees on the right-turn step and wraps at 360', () => {
     const state = setForwardHeading(jumpToRightTurn(turnRoute()), 300);
     expect(requiredHeading(state)).toBe(30);
     expect(navigationInstruction(state, 30)).toBe('Turn right ahead');
-    expect(navigationInstruction(state, 120)).toBe('Turn left to face the path');
+    expect(navigationInstruction(state, 120)).toBe('Turn right ahead');
   });
 
   test('reset state clears the saved forward heading', () => {
@@ -196,19 +196,19 @@ describe('campus destinations', () => {
 describe('when estimated walking may add distance', () => {
   const ready = () => setForwardHeading(turnRoute(), 100);
 
-  test('only while facing the current path direction', () => {
+  test('does not block walking estimates merely because the compass is off or unavailable', () => {
     expect(walkBlockReason(ready(), 100)).toBeNull();
     expect(walkBlockReason(ready(), 100 + FACING_TOLERANCE_DEGREES)).toBeNull();
-    expect(walkBlockReason(ready(), 100 + FACING_TOLERANCE_DEGREES + 5)).toBe('phone 30° off the path');
-    expect(walkBlockReason(ready(), null)).toBe('phone heading unavailable');
+    expect(walkBlockReason(ready(), 100 + FACING_TOLERANCE_DEGREES + 5)).toBeNull();
+    expect(walkBlockReason(ready(), null)).toBeNull();
   });
 
-  test('never before the forward direction, while paused, at an unmade turn, or after the route ends', () => {
-    expect(walkBlockReason(turnRoute(), 100)).toBe('forward direction not set');
+  test('blocks paused guidance, unconfirmed turns and completed routes independently of compass alignment', () => {
+    expect(walkBlockReason(turnRoute(), 100)).toBeNull();
     expect(walkBlockReason({ ...ready(), paused: true }, 100)).toBe('guidance paused');
     const atTurn = jumpToRightTurn(ready());
-    expect(walkBlockReason(atTurn, 190)).toBe('turn not made yet');
+    expect(walkBlockReason(atTurn, 190)).toBe('confirm the turn at the actual hallway junction');
     expect(walkBlockReason(completeCurrentTurn(atTurn), 190)).toBeNull();
-    expect(walkBlockReason({ ...ready(), walkedMeters: 18 }, 100)).toBe('route complete');
+    expect(walkBlockReason({ ...ready(), walkedMeters: 18 }, 100)).toBe('estimated route complete');
   });
 });

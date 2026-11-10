@@ -1,3 +1,4 @@
+import { WalkingPulseDetector, stepMethodLabel } from '../../shared/indoor-tracking';
 import { reactive, ref } from 'vue';
 import { Capacitor } from '@capacitor/core';
 import { IndoorStepSource } from '@/services/indoor-steps';
@@ -18,77 +19,8 @@ export function calibratedStepLength(distance: number, steps: number): number | 
     && length >= 0.2 && length <= 1.5 ? length : null;
 }
 
-export interface StepSample {
-  /** Steps to credit now: all confirmed strides of a new streak, then one per stride. */
-  steps: number;
-  /** A complete acceleration pulse was seen on this sample. */
-  candidate: boolean;
-  /** Why the pulse did not count yet, or null. */
-  reason: string | null;
-}
-
-const QUIET: StepSample = Object.freeze({ steps: 0, candidate: false, reason: null });
-
-/** Conservative walking heuristic: complete pulses plus four consistent strides.
- * Pulses that do not form that rhythm never count, so a brief phone adjustment cannot add distance.
- * Repeated rhythmic shaking can still resemble walking without an independent position source.
- */
-export class WalkingPeaks {
-  private low = false;
-  private pulseStart: number | null = null;
-  private last = -Infinity;
-  private interval: number | null = null;
-  private streak = 0;
-  sample(magnitude: number, time: number): StepSample {
-    if (!Number.isFinite(magnitude) || !Number.isFinite(time)) return { steps: 0, candidate: false, reason: 'invalid motion sample' };
-    if (magnitude > 8) {
-      this.reset();
-      return { steps: 0, candidate: false, reason: 'jolt over 8 m/s²' };
-    }
-    if (magnitude >= 1.4 && this.low && this.pulseStart == null) {
-      this.pulseStart = time;
-      this.low = false;
-    }
-    if (magnitude >= 0.7) return QUIET;
-    this.low = true;
-    if (this.pulseStart == null) return QUIET;
-    const duration = time - this.pulseStart;
-    this.pulseStart = null;
-    if (duration < 60 || duration > 350) {
-      this.reset();
-      return { steps: 0, candidate: true, reason: `pulse lasted ${Math.round(duration)} ms (needs 60–350 ms)` };
-    }
-    const gap = time - this.last;
-    let reason: string | null = null;
-    if (!Number.isFinite(gap)) {
-      this.restartStreak();
-    } else if (gap < 350 || gap > 1100) {
-      reason = `step gap ${Math.round(gap)} ms (needs 350–1100 ms)`;
-      this.restartStreak();
-    } else if (this.interval != null && Math.abs(gap - this.interval) > this.interval * 0.35) {
-      reason = `irregular rhythm (${Math.round(gap)} ms vs ${Math.round(this.interval)} ms)`;
-      this.restartStreak();
-    } else {
-      this.streak += 1;
-      this.interval = this.interval == null ? gap : this.interval * 0.7 + gap * 0.3;
-    }
-    this.last = time;
-    if (this.streak === STREAK_TO_CONFIRM) return { steps: STREAK_TO_CONFIRM, candidate: true, reason: null };
-    if (this.streak > STREAK_TO_CONFIRM) return { steps: 1, candidate: true, reason: null };
-    return { steps: 0, candidate: true, reason: reason ?? `confirming rhythm (${this.streak}/${STREAK_TO_CONFIRM})` };
-  }
-  private restartStreak() {
-    this.streak = 1;
-    this.interval = null;
-  }
-  private reset() {
-    this.low = false;
-    this.pulseStart = null;
-    this.last = -Infinity;
-    this.interval = null;
-    this.streak = 0;
-  }
-}
+export { type StepSample } from '../../shared/indoor-tracking';
+export class WalkingPeaks extends WalkingPulseDetector {}
 
 type MotionConstructor = typeof DeviceMotionEvent & { requestPermission?: () => Promise<string> };
 type Vector = { x: number; y: number; z: number };
@@ -281,12 +213,12 @@ export function useIndoorWalking(
           status => { if (request === generation) message.value = status; },
         );
         if (request !== generation) return;
-        message.value = `${method} active. Walking distance is estimated from actual sensor steps.`;
+        message.value = `${stepMethodLabel(method)} active. Walking distance is estimated from actual sensor steps.`;
         return;
       } catch (error) {
         if (request !== generation) return;
         enabled.value = false;
-        message.value = error instanceof Error ? error.message : 'Android step sensor unavailable.';
+        message.value = `${error instanceof Error ? error.message : 'Android step sensor unavailable.'} Use manual checkpoints or retry.`;
         return;
       }
     }
