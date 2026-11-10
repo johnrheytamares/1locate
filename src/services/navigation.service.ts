@@ -19,6 +19,7 @@ function cloneDestination(destination: Destination): Destination {
     ...destination,
     outdoorTarget: { ...destination.outdoorTarget },
     indoorRoute: destination.indoorRoute.map((step) => ({ ...step })),
+    ...(destination.indoorJourney?{indoorJourney:JSON.parse(JSON.stringify(destination.indoorJourney))}:{}),
   };
   if (destination.details) {
     copy.details = {
@@ -74,7 +75,7 @@ export function getDestination(id: string): Destination | null {
 }
 
 export function indoorRouteMeters(destination: Destination): number {
-  return destination.indoorRoute.reduce((sum, step) => sum + step.distance, 0);
+  return destination.indoorJourney ? destination.indoorJourney.instructions.reduce((sum,s)=>sum+(s.kind==='walk'?s.distance:0),0) : destination.indoorRoute.reduce((sum, step) => sum + step.distance, 0);
 }
 
 export function selectDestination(id: string): Destination | null {

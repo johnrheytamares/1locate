@@ -1,16 +1,18 @@
 import type { Point } from './outdoor-graph';
 export interface ImagePoint { x: number; y: number; }
 export interface MapAnchor extends Point, ImagePoint {}
-export interface CampusMap { image: string; anchors: MapAnchor[]; }
+export interface CampusMap { image: string; anchors: MapAnchor[]; checks?: MapAnchor[]; }
 export function validImagePoint(p: ImagePoint) { return Number.isFinite(p.x) && Number.isFinite(p.y) && p.x >= 0 && p.x <= 1 && p.y >= 0 && p.y <= 1; }
 export function validateCampusMap(input: unknown): CampusMap {
   if (!input || typeof input !== 'object') throw new Error('Invalid campus reference map');
   const map = input as CampusMap;
   if (typeof map.image !== 'string' || map.image.length > 1_400_000
-    || !/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$/.test(map.image)
+    || (map.image !== '/images/updated_map.png' && !/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$/.test(map.image))
     || !Array.isArray(map.anchors) || map.anchors.length > 3) throw new Error('Use a PNG, JPEG or WebP campus map up to 1 MB.');
-  for (const a of map.anchors) if (!a || !validImagePoint(a) || !Number.isFinite(a.latitude) || Math.abs(a.latitude) > 90
+  if (map.checks != null && (!Array.isArray(map.checks) || map.checks.length > 20)) throw new Error('Invalid map check points');
+  for (const a of [...map.anchors, ...(map.checks || [])]) if (!a || !validImagePoint(a) || !Number.isFinite(a.latitude) || Math.abs(a.latitude) > 90
     || !Number.isFinite(a.longitude) || Math.abs(a.longitude) > 180) throw new Error('Invalid campus map anchor');
+  if (map.checks?.some(check => map.anchors.some(anchor => Math.hypot(check.x-anchor.x, check.y-anchor.y) < 0.025))) throw new Error('Use a separate landmark for the independent map check.');
   if (map.anchors.length === 3) {
     if (Math.abs(determinant(map.anchors, 'x', 'y')) < 0.001 || Math.abs(determinant(map.anchors, 'longitude', 'latitude')) < 1e-12) {
       throw new Error('Choose three distinct, widely spaced map anchors that are not on one line.');
@@ -43,4 +45,18 @@ export function imageToGps(map: CampusMap, point: ImagePoint): Point | null {
 export function gpsToImage(map: CampusMap, point: Point): ImagePoint | null {
   const result = transform(map, { a: point.longitude, b: point.latitude }, true);
   return result ? { x: result.a, y: result.b } : null;
+}
+
+/** Independent landmarks, not the three points used to fit the transform. */
+export function alignmentError(map: CampusMap): number | null {
+  if (map.anchors.length !== 3 || !map.checks?.length) return null;
+  const radians = (n: number) => n * Math.PI / 180;
+  let squared = 0;
+  for (const check of map.checks) {
+    const predicted = imageToGps(map, check);
+    if (!predicted) return null;
+    const h = Math.sin(radians(check.latitude - predicted.latitude) / 2) ** 2 + Math.cos(radians(check.latitude)) * Math.cos(radians(predicted.latitude)) * Math.sin(radians(check.longitude - predicted.longitude) / 2) ** 2;
+    squared += (6371000 * 2 * Math.asin(Math.sqrt(Math.min(1, h)))) ** 2;
+  }
+  return Math.sqrt(squared / map.checks.length);
 }

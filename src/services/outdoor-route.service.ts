@@ -1,5 +1,6 @@
+import { loadOutdoorNetwork } from './route-package-cache';
 import type { CampusMap } from '../../shared/campus-map';
-import { campusWalkingRoute, parseOutdoorGraph, type Point } from '../../shared/outdoor-graph';
+import { campusWalkingRoute, type Point } from '../../shared/outdoor-graph';
 import { fetchWalkingRoute, type WalkingRoute } from './walking-route.service';
 import { calculateDistance } from './geo.service';
 
@@ -7,13 +8,12 @@ export interface OutdoorWalkingRoute extends WalkingRoute {
   source: 'campus' | 'osm';
   referenceMap?: CampusMap;
   approachMeters: number;
+  instructions?: { index: number; direction: 'straight' | 'left' | 'right' }[];
 }
 
 /** The bundled network is optional. An invalid configured network fails closed. */
 export async function fetchOutdoorRoute(start: Point, end: Point, signal: AbortSignal): Promise<OutdoorWalkingRoute> {
-  const response = await fetch(`${import.meta.env.BASE_URL}campus-walking-network.json`, { signal });
-  if (!response.ok) throw new Error('Campus walking network could not load. Retry routing.');
-  const graph = parseOutdoorGraph(await response.json());
+  const graph = await loadOutdoorNetwork(signal);
   const campus = campusWalkingRoute(graph, start, end);
   if (campus) return campus;
   const route = await fetchWalkingRoute(start, end, signal);

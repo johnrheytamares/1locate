@@ -5,13 +5,13 @@
       <div class="editor-title"><span class="eyebrow">DESTINATION ROUTE</span><h2>{{ destination ? 'Edit route' : 'Add Destination' }}</h2><p>{{ destination?.name || 'Build a route from the entrance to your room.' }}</p><span v-if="building" class="destination-context">{{ building.name }} · {{ floorName }}</span></div>
       <span class="state-pill" :class="{ active: recording }"><span class="state-dot" aria-hidden="true"></span> {{ starting ? 'Preparing' : recording ? 'Recording' : paused ? 'Paused' : 'Draft route' }}</span>
     </header>
-    <p class="intro">Create a same-floor route from the entrance. Directions follow the direction of travel.</p>
+    <p class="intro">Choose a room, calibrate once, then walk and mark the turns. Distance is estimated from real detected steps; review it before saving.</p>
     <p v-if="error" class="notice error" role="alert">{{ error }}</p>
-    <div class="workspace" :class="{ 'is-recording': recording || paused || starting }">
+    <div class="workspace" :class="{ 'is-recording': recording || paused || starting, 'manual-workspace': !recordingMode }">
     <section v-show="!recording && !paused && !starting" class="setup-panel">
     <h3><span class="section-number">01</span> Prepare your walk</h3>
     <fieldset :disabled="busy || recording || paused || starting">
-      <label v-if="!destination">Destination ID <input v-model="id" maxlength="120" /></label>
+      <details v-if="!destination"><summary>Advanced: destination ID</summary><label>Destination ID <input v-model="id" maxlength="120" /></label></details>
       <label v-if="!destination">Room
         <select v-model="roomId"><option value="">Choose a room</option><option v-for="room in rooms" :key="room.id" :value="room.id">{{ buildings.find(b => b.id === room.building_id)?.name }} / {{ room.name }} {{ room.room_number }}</option></select>
       </label>
@@ -19,11 +19,11 @@
         <svg class="entrance-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M19 10c0 5-7 11-7 11S5 15 5 10a7 7 0 1 1 14 0Z" /><circle cx="12" cy="10" r="2.5" /></svg>
         <div><span class="eyebrow">STARTING POINT</span><strong>{{ building?.entrance_name || 'Set the building entrance name first' }}</strong><small>{{ building?.name || 'Choose a linked room to get started' }}</small></div>
       </div>
-      <label class="entrance-check" :class="{ confirmed: atEntrance }"><input v-model="atEntrance" type="checkbox" /> <span><strong>I am at this entrance</strong><small>Facing the first corridor, ready to walk.</small></span></label>
-      <label class="stride-field"><span>Walking step length</span><span class="unit-input"><input v-model.number="stride" type="number" min="0.2" max="1.5" step="0.01" inputmode="decimal" /><span aria-hidden="true">m / step</span></span><small>Use your measured distance per walking step.</small></label>
+      <label v-if="recordingMode" class="entrance-check" :class="{ confirmed: atEntrance }"><input v-model="atEntrance" type="checkbox" /> <span><strong>I am at this entrance</strong><small>Facing the first corridor, ready to walk.</small></span></label>
+      <IndoorStepCalibration :disabled="recording || paused || starting || busy" v-if="recordingMode" :user="session.state.userId || 'local'" @calibrated="calibrated" @activity="calibrating = $event" /><label v-if="recordingMode && availableFloors.length">Starting floor<select v-model="currentFloor" :disabled="recording || starting"><option value="">Choose starting floor</option><option v-for="floor in availableFloors" :key="floor.id" :value="floor.id">{{ floor.name }}</option></select></label><label v-if="recordingMode" class="stride-field"><span>Walking step length</span><span class="unit-input"><input :value="profile?.stride || ''" readonly type="number" min="0.2" max="1.5" step="0.01" inputmode="decimal" /><span aria-hidden="true">m / step</span></span><small>{{ profile ? 'Saved calibration on this device.' : 'Complete a measured calibration walk to enable automatic distance.' }}</small></label>
     </fieldset>
     </section>
-    <section class="recorder-panel">
+    <section v-if="recordingMode" class="recorder-panel">
     <h3><span class="section-number">02</span> Record your route</h3>
     <div v-if="recording || paused || starting" ref="cameraPanel" class="camera-recorder">
       <video ref="video" autoplay muted playsinline aria-label="Live route recording camera" />
@@ -32,21 +32,23 @@
         <span>{{ building?.name }} · {{ floorName }}</span>
         <span>{{ starting ? 'Opening camera…' : paused ? 'Paused' : 'Recording' }} · Segment {{ steps.length + 1 }}</span>
       </div>
-      <div class="camera-distance"><strong>{{ directionLabel }}</strong><b>{{ Number.isFinite(meters) ? meters.toFixed(2) : '—' }} m</b><span>{{ manual ? 'Manually entered distance' : 'Step-estimated distance' }}</span></div>
+      <div class="camera-distance"><strong>{{ directionLabel }}</strong><b>{{ Number.isFinite(meters) ? meters.toFixed(2) : '—' }} m</b><span>{{ manual ? 'Manually measured distance' : 'Step-estimated distance' }}</span></div>
       <div class="camera-controls">
         <p v-if="error" role="alert">{{ error }}</p>
         <p v-if="cameraMessage" role="status">{{ cameraMessage }}</p>
-        <p aria-live="polite">{{ status }}</p>
-        <label class="manual-toggle"><input v-model="manual" type="checkbox" :disabled="starting || !sensorsAvailable" @change="changeDistanceMode" /> Enter measured distances manually</label>
-        <label v-if="manual">Active segment meters <input v-model.number="meters" type="number" min="0.01" max="500" step="0.01" :disabled="paused || starting" /></label>
+        <p aria-live="polite">{{ status }}</p><p class="indoor-metrics">{{ (totalMeters + (Number.isFinite(meters) ? meters : 0)).toFixed(2) }} m total · {{ detectedSteps }} detected steps · {{ segmentSteps }} in this section</p><p class="sensor-status" role="status">{{ sensorStatus }}</p>
+        <label class="manual-toggle"><input v-model="manual" type="checkbox" :disabled="starting" @change="changeDistanceMode" /> Enter measured distances manually</label>
+        <label v-if="manual">Measured section distance (m) <input v-model.number="meters" type="number" min="0.01" max="500" step="0.01" :disabled="paused || starting" /></label>
+        <p>{{ manual ? 'Enter an independently measured distance, then mark the next turn.' : 'Walk normally. Mark each turn when you reach it; distance updates from detected steps.' }}</p>
         <div class="turn-actions">
           <button type="button" :disabled="!recording" @click="mark('straight')">↑ Straight</button>
           <button type="button" :disabled="!recording" @click="mark('left')">← Turn Left</button>
           <button type="button" :disabled="!recording" @click="mark('right')">→ Turn Right</button>
         </div>
+        <button v-if="availableFloors.length > 1 && recording" class="secondary" type="button" @click="beginFloorChange">Change floor</button><div v-if="floorChange" class="floor-transition"><p>Step tracking is paused. Use the stairs or elevator, then confirm the actual floor.</p><label v-if="!currentFloor">Starting floor<select v-model="currentFloor" :disabled="recording || starting"><option value="">Choose floor</option><option v-for="floor in availableFloors" :key="floor.id" :value="floor.id">{{ floor.name }}</option></select></label><label>How are you changing floors?<select v-model="transitionType"><option value="upstairs">Go Upstairs</option><option value="downstairs">Go Downstairs</option><option value="elevator">Use Elevator</option></select></label><label>Arriving floor<select v-model="transitionFloor"><option value="">Choose floor</option><option v-for="floor in availableFloors" :key="floor.id" :value="floor.id">{{ floor.name }}</option></select></label><button type="button" @click="confirmFloor">I have arrived at this floor</button></div>
         <div class="record-actions">
-          <button class="secondary" type="button" :disabled="starting" @click="paused ? start() : pause()">{{ paused ? 'Resume' : 'Pause' }}</button>
-          <button type="button" :disabled="starting" @click="finish">✓ Finish Route</button>
+          <button class="secondary" type="button" :disabled="starting || floorChange" @click="paused ? start() : pause()">{{ paused ? 'Resume' : 'Pause' }}</button>
+          <button type="button" :disabled="starting || floorChange" @click="finish">✓ Finish Route</button>
           <button class="secondary" type="button" @click="cancelRecording">Cancel recording</button>
         </div>
       </div>
@@ -60,22 +62,26 @@
     <p class="record-hint">Distances are estimates. Check and correct them before saving.</p>
     </section>
     </div>
+    <label v-show="!recording && !paused && !starting" class="recording-choice"><input v-model="recordingMode" type="checkbox" /> Use the automatic camera recorder (manual editing is available below)</label>
     <section v-show="!recording && !paused && !starting" ref="review" class="route-panel" tabindex="-1">
-    <div class="route-heading"><h3><span class="section-number">03</span> Review route segments</h3><div class="route-summary"><span>{{ steps.length }} / 50 segments</span><strong>{{ totalMeters.toFixed(2) }} m total</strong></div></div>
-    <p v-if="!steps.length" class="route-empty">Your route starts here. Record a walk or add segments manually.</p>
+    <div class="route-heading"><h3><span class="section-number">03</span> Review instructions</h3><div class="route-summary"><span>{{ steps.length }} / 50 segments</span><strong>{{ totalMeters.toFixed(2) }} m total</strong></div></div>
+    <p v-if="!steps.length" class="route-empty">Record a walk to create instructions automatically, or use Add instruction for measured manual entry.</p>
+    <p class="record-hint">Floor changes are confirmed checkpoints. They never count as walking meters.</p>
+    <ol v-if="steps.length" class="instruction-preview" aria-label="Indoor route preview"><li v-for="(step,index) in steps" :key="index">{{ instructionLabel(step) }}<span>{{ !step.kind || step.kind === 'walk' ? ` — ${step.distance} m` : '' }}</span></li></ol><button v-if="steps.length > 1" class="secondary" type="button" :disabled="busy || recording || paused" @click="mergeCompatible">Merge compatible straight sections</button>
+
     <fieldset :disabled="busy || recording || paused || starting">
       <div v-for="(step, index) in steps" :key="index" class="segment">
-        <div class="segment-caption"><span>{{ String(index + 1).padStart(2, '0') }}</span><strong>Segment {{ index + 1 }}</strong></div>
-        <label class="segment-direction">Direction <span class="sr-only">for segment {{ index + 1 }}</span><select v-model="step.direction"><option value="straight">Straight</option><option value="left">Turn left</option><option value="right">Turn right</option></select></label>
-        <label class="segment-distance">Distance <span class="sr-only">for segment {{ index + 1 }} in meters</span><span class="unit-input"><input v-model.number="step.distance" type="number" min="0.01" max="500" step="0.01" inputmode="decimal" /><span aria-hidden="true">m</span></span></label>
-        <div class="segment-actions">
+        <div class="segment-caption"><span>{{ String(index + 1).padStart(2, '0') }}</span><strong>Step {{ index + 1 }}</strong></div>
+        <label v-if="!step.kind || step.kind === 'walk'" class="segment-direction">Direction <span class="sr-only">for segment {{ index + 1 }}</span><select v-model="step.direction"><option value="straight">Continue Straight</option><option value="left">Turn Left</option><option value="right">Turn Right</option></select></label>
+        <p v-if="step.kind && step.kind !== 'walk'">{{ instructionLabel(step) }} · Confirmed checkpoint</p><label v-if="!step.kind || step.kind === 'walk'" class="segment-distance">Distance <span class="sr-only">for segment {{ index + 1 }} in meters</span><span class="unit-input"><input v-model.number="step.distance" @change="step.method = 'manual'; step.calibration = undefined" type="number" min="0.01" max="500" step="0.01" inputmode="decimal" /><span aria-hidden="true">m</span></span></label>
+        <label v-if="!step.kind || step.kind === 'walk'" class="checkpoint-toggle"><input v-model="step.checkpoint" type="checkbox" /> Keep this checkpoint (door / landmark)</label><div class="segment-actions">
           <button type="button" :disabled="index === 0" aria-label="Move segment up" title="Move segment up" @click="move(index, -1)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 12 6-6 6 6M12 6v13" /></svg></button>
           <button type="button" :disabled="index === steps.length - 1" aria-label="Move segment down" title="Move segment down" @click="move(index, 1)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 12 6 6 6-6M12 18V5" /></svg></button>
           <button class="remove-segment" type="button" :aria-label="`Remove segment ${index + 1}`" title="Remove segment" @click="steps.splice(index, 1)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 10v7m4-7v7" /></svg><span class="sr-only">Remove</span></button>
         </div>
       </div>
-      <button class="secondary add-segment" type="button" :disabled="steps.length >= 50" @click="steps.push({ direction: 'straight', distance: 1 })"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>Add segment</button>
-    </fieldset>
+      <button class="secondary add-segment" type="button" :disabled="steps.length >= 50" @click="steps.push({ direction: 'straight', distance: 0 })"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>Add instruction</button>
+    </fieldset><label v-if="multiFloor" class="entrance-check"><input v-model="routeChecked" type="checkbox" /><span>I checked the full route, floor transitions and destination on site.</span></label>
     </section>
     <footer v-show="!recording && !paused && !starting" class="editor-footer">
     <p><strong>Save as an inactive draft</strong><span>Verify the route on site before publishing.</span></p>
@@ -88,11 +94,16 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { onBeforeRouteLeave } from 'vue-router';
 import type { Building, DestinationRecord, Floor, Room } from '@/types';
-import { destinationPayload, validatedRoute, WalkingPeaks, type EditableStep } from '@/lib/route-editor';
-import { createDestination, saveDestinationRoute } from '@/services/campus';
+import IndoorStepCalibration from './IndoorStepCalibration.vue';
+import { IndoorStepSource, readCalibration } from '../services/indoor-steps';
+import { App } from '@capacitor/app';
+import { type PluginListenerHandle, Capacitor } from '@capacitor/core';
+import type { StrideProfile, IndoorMeasurement } from '../../../shared/indoor-tracking';
+import { destinationPayload, validatedRoute, hasFloorTransitions, buildIndoorJourney, mergeStraightSteps, type EditableStep } from '@/lib/route-editor';
+import { createDestination, saveDestinationRoute, saveDestinationJourney } from '@/services/campus';
 import { describeError } from '@/lib/errors';
 import { useSession } from '@/stores/session';
 
@@ -101,15 +112,24 @@ const emit = defineEmits<{ saved: [DestinationRecord]; close: [] }>();
 const id = ref(props.destination?.id ?? crypto.randomUUID());
 const roomId = ref(props.destination?.room_id ?? props.initialRoom ?? '');
 const building = computed(() => props.buildings.find(b => b.id === props.rooms.find(r => r.id === roomId.value)?.building_id));
-const steps = ref<EditableStep[]>((props.destination?.indoor_route ?? []).map(s => ({ direction: String(s.direction), distance: Number(s.distance) })));
+const steps = ref<EditableStep[]>(props.destination?.indoor_journey?.instructions ? props.destination.indoor_journey.instructions.map(s=>({...s})) : (props.destination?.indoor_route ?? []).map(s => ({ ...s, direction: String(s.direction), distance: Number(s.distance) })));
 const linkedRoom = computed(() => props.rooms.find(r => r.id === roomId.value));
 const floorName = computed(() => props.floors?.find(f => f.id === linkedRoom.value?.floor_id)?.name || 'Floor not specified');
 const video = ref<HTMLVideoElement | null>(null);
 const cameraPanel = ref<HTMLElement | null>(null);
 const review = ref<HTMLElement | null>(null);
 const starting = ref(false);
+const recordingMode = ref(true);
 const manual = ref(false);
-const sensorsAvailable = ref(false);
+const sensorsAvailable = ref(false), calibrating=ref(false);
+const profile = ref<StrideProfile|null>(null), segmentSteps=ref(0), detectedSteps=ref(0), sensorStatus=ref('Calibrate before automatic distance tracking.');
+const stepSource=new IndoorStepSource();
+const currentFloor=ref('');
+const floorChange=ref(false), transitionType=ref<'upstairs'|'downstairs'|'elevator'>('upstairs'), transitionFloor=ref(''), routeChecked=ref(false);
+const availableFloors=computed(()=>props.floors?.filter(f=>f.building_id===building.value?.id)||[]);
+const multiFloor=computed(()=>hasFloorTransitions(steps.value));
+let nativeListener:PluginListenerHandle|undefined;let editorAlive=true;
+watch(steps,()=>{routeChecked.value=false;},{deep:true});
 const cameraMessage = ref('');
 const direction = ref('straight');
 const directionLabel = computed(() => ({ straight: '↑ Straight', left: '← Left', right: '→ Right' })[direction.value]);
@@ -123,6 +143,7 @@ const recording = ref(false);
 const paused = ref(false);
 const atEntrance = ref(false);
 const recordDisabledReason = computed(() => {
+  if (calibrating.value) return 'Finish the calibration walk before recording a route.';
   if (busy.value) return 'Wait for the destination to finish saving.';
   if (!roomId.value) return 'Link this destination to a room and save the link before recording. You can still edit its route manually.';
   if (!building.value) return 'The linked room or building could not be found. Check the room link before recording.';
@@ -132,16 +153,16 @@ const recordDisabledReason = computed(() => {
 });
 const stride = ref(0.7);
 const meters = ref(0);
-const status = ref('Manual entry is available without sensors.');
+const status = ref('Calibrate once, then record automatic step-estimated distances. Manual editing remains available.');
 
 const session = useSession();
 const draftKey = `route-draft:${session.state.userId}:${props.destination?.id ?? 'new'}`;
 try {
-  const raw = sessionStorage.getItem(draftKey);
+  const raw = sessionStorage.getItem(draftKey) || (()=>{try{return localStorage.getItem(draftKey);}catch{return null;}})();
   if (raw) {
     const draft = JSON.parse(raw);
     if (typeof draft.id === 'string' && typeof draft.roomId === 'string' && Array.isArray(draft.steps)) {
-      id.value = draft.id; roomId.value = draft.roomId;
+      id.value = draft.id; roomId.value = draft.roomId;if(typeof draft.currentFloor==='string')currentFloor.value=draft.currentFloor;
       steps.value = draft.steps.slice(0, 50).filter((s: EditableStep) => s && typeof s.direction === 'string' && typeof s.distance === 'number');
       status.value = 'Recovered unsaved draft. Check all segments before saving.';
     }
@@ -149,27 +170,32 @@ try {
 } catch { /* Storage can be unavailable; the editor still works in memory. */ }
 function persist() {
   try {
-    const pending = meters.value > 0 ? [{ direction: direction.value, distance: meters.value }] : [];
-    sessionStorage.setItem(draftKey, JSON.stringify({ id: id.value, roomId: roomId.value, steps: [...steps.value, ...pending] }));
+    const pending = meters.value > 0 ? [{kind:'walk', direction: direction.value, distance: meters.value,method:manual.value?'manual':profile.value?.method,...(!manual.value&&profile.value?{calibration:{...profile.value}}:{}),recordedAt:new Date().toISOString()}] : [];
+    const draft=JSON.stringify({id:id.value,roomId:roomId.value,currentFloor:currentFloor.value,steps:[...steps.value,...pending]});sessionStorage.setItem(draftKey,draft);try{localStorage.setItem(draftKey,draft);}catch{ /* Session recovery remains available. */ }
   } catch { /* Saving to Supabase remains available. */ }
 }
-let peaks = new WalkingPeaks();
-let sensorTimer: ReturnType<typeof setTimeout> | undefined;
-let samples = 0;
+
 let generation = 0;
 let beforeRecording: EditableStep[] = [];
 watch([id, roomId, steps, meters], persist, { deep: true });
 watch(roomId, () => { atEntrance.value = false; });
 
-function motion(event: DeviceMotionEvent) {
-  if (!recording.value) return;
-  const a = event.acceleration;
-  if (a?.x == null || a.y == null || a.z == null || ![a.x, a.y, a.z].every(Number.isFinite)) return;
-  samples++;
-  if (manual.value) return;
-  const rotation = event.rotationRate;
-  if (rotation && [rotation.alpha, rotation.beta, rotation.gamma].some(v => v != null && Math.abs(v) > 60)) { peaks = new WalkingPeaks(); return; }
-  if (peaks.sample(Math.hypot(a.x, a.y, a.z), performance.now())) meters.value = Math.round((meters.value + stride.value) * 100) / 100;
+function instructionLabel(step:EditableStep){return step.kind&&step.kind!=='walk'?({upstairs:'Go Upstairs',downstairs:'Go Downstairs',elevator:'Use Elevator','arrive-floor':'Arrive at Floor',arrived:'Arrived at Destination'}[step.kind]||step.kind)+(step.floorName?` — ${step.floorName}`:''):({straight:'Continue Straight',left:'Turn Left, then walk',right:'Turn Right, then walk'}[step.direction]||step.direction);}
+onMounted(()=>{for(const method of ['hardware-detector','hardware-counter','motion-estimate'] as IndoorMeasurement[]){const saved=readCalibration(session.state.userId||'local',method);if(saved){profile.value=saved;stride.value=saved.stride;break;}}});
+function calibrated(value:StrideProfile){profile.value=value;stride.value=value.stride;manual.value=false;status.value='Calibration ready. Start from the entrance.';}
+async function enableSteps(request:number){
+  try{
+    const method=await stepSource.start((count,method)=>{
+      if(request!==generation||!recording.value||manual.value||!profile.value||profile.value.method!==method)return;
+      if(!Number.isInteger(count)||count<=0||count>100){pause();error.value='Unexpected step batch. Check the sensor and retry.';return;}
+      detectedSteps.value+=count;segmentSteps.value+=count;meters.value=Math.round((meters.value+count*profile.value.stride)*100)/100;
+      if(meters.value>500){pause();error.value='This section reached the 500 m limit. Review before continuing.';}
+    },message=>{if(request!==generation)return;if(message==='paused'){pause();return;}sensorStatus.value=message;if(message.startsWith('No usable')){manual.value=true;sensorsAvailable.value=false;void stepSource.stop();status.value=message;}});
+    if(request!==generation){await stepSource.stop();return;}
+    const saved=profile.value?.method===method?profile.value:readCalibration(session.state.userId||'local',method);
+    if(!saved){manual.value=true;sensorsAvailable.value=false;await stepSource.stop();sensorStatus.value='Calibration required for automatic distance.';status.value='No usable motion samples or calibration profile yet. Calibrate on this phone, or use measured manual distances.';return;}
+    profile.value=saved;stride.value=saved.stride;sensorsAvailable.value=true;sensorStatus.value=`${method} · ${saved.stride.toFixed(2)} m per step`;status.value='Automatic tracking active. Walk normally and mark each turn.';
+  }catch(err){if(request!==generation)return;await stepSource.stop();manual.value=true;sensorsAvailable.value=false;sensorStatus.value='Automatic step tracking unavailable.';status.value=err instanceof Error?err.message:describeError(err);}
 }
 function stopCamera() {
   stream?.getTracks().forEach(track => { track.onended = null; track.stop(); });
@@ -178,16 +204,12 @@ function stopCamera() {
 }
 function stop() {
   generation++;
-  clearTimeout(sensorTimer);
-  window.removeEventListener('devicemotion', motion);
+  void stepSource.stop();
   stopCamera();
   recording.value = false;
   starting.value = false;
 }
-function changeDistanceMode() {
-  peaks = new WalkingPeaks();
-  status.value = manual.value ? 'Enter the measured distance of each segment before marking a direction.' : 'Step estimates may undercount short walks. Correct distances in review.';
-}
+function changeDistanceMode(){if(manual.value){void stepSource.stop();sensorStatus.value='Manual distance entry';status.value='Enter independently measured meters for each section.';}else if(recording.value){void enableSteps(generation);}}
 async function start() {
   if (starting.value || recordDisabledReason.value) return;
   error.value = '';
@@ -196,15 +218,12 @@ async function start() {
   if (!resuming && steps.value.length && !window.confirm('Start a new recording? It replaces the route in this editor. Cancel recording restores it.')) return;
   if (!resuming) {
     beforeRecording = steps.value.map(s => ({ ...s }));
-    steps.value = []; meters.value = 0; direction.value = 'straight';
+    steps.value = []; meters.value = 0; segmentSteps.value=0;detectedSteps.value=0;direction.value = 'straight';routeChecked.value=false;
   }
   const request = ++generation;
   starting.value = true;
   void nextTick(() => cameraPanel.value?.scrollIntoView?.({ block: 'start' }));
   cameraMessage.value = '';
-  // Request motion permission in the user gesture, independently of camera support.
-  const api = window.DeviceMotionEvent as (typeof DeviceMotionEvent & { requestPermission?: () => Promise<string> }) | undefined;
-  const permission = api?.requestPermission ? api.requestPermission().catch(() => 'denied') : Promise.resolve(api ? 'granted' : 'unavailable');
   try {
     if (!navigator.mediaDevices?.getUserMedia) throw new Error('Use HTTPS or localhost and a browser with camera support. Manual recording remains available.');
     const opened = await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: { ideal: 'environment' } } });
@@ -219,43 +238,41 @@ async function start() {
     stopCamera();
     cameraMessage.value = 'Camera unavailable or permission denied. Check camera permission and HTTPS/localhost. You can continue recording instructions manually.';
   }
-  const sensorPermission = await permission;
-  if (request !== generation) return;
-  sensorsAvailable.value = sensorPermission === 'granted';
-  manual.value = manual.value || sensorPermission !== 'granted';
-  paused.value = false; starting.value = false; recording.value = true;
-  samples = 0; peaks = new WalkingPeaks();
-  if (sensorPermission === 'granted') window.addEventListener('devicemotion', motion);
-  status.value = sensorPermission !== 'granted' ? 'Motion sensors unavailable. Enter measured distances manually.' : manual.value ? 'Enter measured distances manually.' : 'Recording step estimates. Mark a direction at each corner.';
-  sensorTimer = setTimeout(() => {
-    if (!samples && recording.value) { manual.value = true; sensorsAvailable.value = false; status.value = 'No usable motion samples. Enter measured segment distances manually.'; }
-  }, 4000);
+  if(request!==generation)return;
+  paused.value=false;starting.value=false;recording.value=true;
+  if(manual.value){status.value='Manual distance entry. Automatic steps are not being recorded.';sensorStatus.value='Manual distance entry';}
+  else await enableSteps(request);
 }
 function pause() { stop(); paused.value = true; status.value = 'Paused. Return to the same position and facing before resuming.'; }
-function mark(next: string) {
-  if (!recording.value && !paused.value) return false;
-  if (!Number.isFinite(meters.value) || meters.value <= 0 || meters.value > 500) { error.value = 'Walk a segment first, or enter a measured distance above 0 and at most 500 meters.'; return false; }
-  if (steps.value.length >= 50) { pause(); error.value = 'Maximum 50 segments. Review the route.'; return false; }
-  steps.value.push({ direction: direction.value, distance: meters.value });
-  meters.value = 0; direction.value = next; peaks = new WalkingPeaks(); error.value = '';
-  if (steps.value.length === 50) {
-    stop(); paused.value = false;
-    status.value = 'Maximum 50 segments recorded. Review the route before saving.';
-    void nextTick(() => { review.value?.focus(); review.value?.scrollIntoView?.({ block: 'start' }); });
-    return true;
-  }
-  status.value = `${next === 'straight' ? 'Straight' : next === 'left' ? 'Turn Left' : 'Turn Right'} selected — Segment ${steps.value.length + 1}. Previous segment recorded.`;
-  return true;
+function finalizeSegment(){
+  if(!Number.isFinite(meters.value)||meters.value<=0||meters.value>500){error.value='Walk a section first, or enter a measured distance above 0 and at most 500 meters.';return false;}
+  if(steps.value.length>=50){error.value='Maximum 50 recorded instructions. Review the route.';return false;}
+  const floor=availableFloors.value.find(f=>f.id===currentFloor.value);
+  const measurement=manual.value?'manual':profile.value?.method;
+  steps.value.push({kind:'walk',direction:direction.value,distance:meters.value,...(floor?{floorId:floor.id,floorName:floor.name,level:floor.level}:{}),...(measurement?{method:measurement}:{}),...(!manual.value&&profile.value?{calibration:{...profile.value}}:{}),recordedAt:new Date().toISOString()});
+  meters.value=0;segmentSteps.value=0;error.value='';return true;
 }
+function mark(next:string){
+  if(!recording.value&&!paused.value)return false;
+  if(next==='straight'&&direction.value==='straight'){status.value='Continue straight. Distance tracking stays in the same section.';return true;}
+  if(!finalizeSegment())return false;direction.value=next;status.value='Previous section recorded. Continue walking in the selected direction.';return true;
+}
+function beginFloorChange(){if(!recording.value)return;if(meters.value>0&&!finalizeSegment())return;pause();floorChange.value=true;}
+async function confirmFloor(){const floor=availableFloors.value.find(f=>f.id===transitionFloor.value);if(!floor){error.value='Choose the actual floor before confirming.';return;}
+  const previous=availableFloors.value.find(f=>f.id===currentFloor.value);if(!previous){error.value='Choose the starting floor before recording a floor change.';return;}if(previous.id===floor.id||(transitionType.value==='upstairs'&&floor.level<=previous.level)||(transitionType.value==='downstairs'&&floor.level>=previous.level)){error.value='Choose a floor that matches the selected transition.';return;}
+  const base={direction:'straight',distance:0,checkpoint:true,floorId:floor.id,floorName:floor.name,level:floor.level,recordedAt:new Date().toISOString()};
+  steps.value.push({...base,kind:transitionType.value},{...base,kind:'arrive-floor'});floorChange.value=false;currentFloor.value=floor.id;direction.value='straight';await start();
+}
+function mergeCompatible(){steps.value=mergeStraightSteps(steps.value);routeChecked.value=false;}
 async function finish() {
-  if (meters.value !== 0 && !mark('straight')) return;
+  if (meters.value !== 0 && !finalizeSegment()) return;
   stop(); paused.value = false;
-  status.value = 'Review directions and measured distances before saving.';
+  steps.value=mergeStraightSteps(steps.value);floorChange.value=false;cameraMessage.value='';status.value = 'Recording finished. Review estimated distances and directions before saving.';
   await nextTick(); review.value?.focus(); review.value?.scrollIntoView?.({ block: 'start', behavior: 'smooth' });
 }
 function cancelRecording() {
   if (!window.confirm('Cancel this recording and restore the previous editor route?')) return;
-  stop(); paused.value = false; meters.value = 0; steps.value = beforeRecording.map(s => ({ ...s })); status.value = 'Recording cancelled; previous editor route restored.';
+  stop(); paused.value = false; meters.value = 0;segmentSteps.value=0;detectedSteps.value=0;floorChange.value=false;cameraMessage.value='';error.value=''; steps.value = beforeRecording.map(s => ({ ...s })); status.value = 'Recording cancelled; previous editor route restored.';
 }
 function move(index: number, delta: number) { const target = index + delta; [steps.value[index], steps.value[target]] = [steps.value[target], steps.value[index]]; }
 function close() { if (busy.value || (dirty.value && !window.confirm('Leave with unsaved changes? A draft is kept in this tab for recovery.'))) return; stop(); persist(); emit('close'); }
@@ -264,13 +281,14 @@ async function save() {
   busy.value = true; error.value = '';
   try {
     let saved: DestinationRecord;
-    if (props.destination) saved = await saveDestinationRoute(props.destination.id, validatedRoute(steps.value));
+    if (props.destination) saved = multiFloor.value ? await saveDestinationJourney(props.destination.id,buildIndoorJourney(id.value,building.value!.id,linkedRoom.value?.floor_id||null,steps.value,routeChecked.value)) : await saveDestinationRoute(props.destination.id, validatedRoute(steps.value));
     else {
       const room = props.rooms.find(r => r.id === roomId.value);
       if (!room || !building.value) throw new Error('Choose a room with a building.');
-      saved = await createDestination(destinationPayload(id.value, room, building.value, steps.value));
+      const payload=destinationPayload(id.value,room,building.value,steps.value);if(payload.indoor_journey)payload.indoor_journey=buildIndoorJourney(id.value,building.value.id,room.floor_id,steps.value,routeChecked.value);saved = await createDestination(payload);
     }
-    try { sessionStorage.removeItem(draftKey); } catch { /* Storage may be disabled. */ }
+
+    try { sessionStorage.removeItem(draftKey);try{localStorage.removeItem(draftKey);}catch{} } catch { /* Storage may be disabled. */ }
     emit('saved', saved);
   } catch (err) { error.value = err instanceof Error ? err.message : describeError(err); }
   finally { busy.value = false; }
@@ -279,14 +297,20 @@ function visibility() { if (document.hidden && (recording.value || starting.valu
 function pagehide() { if (recording.value || starting.value) pause(); }
 function leaving(event: BeforeUnloadEvent) { if (dirty.value) { event.preventDefault(); event.returnValue = ''; } }
 onBeforeRouteLeave(() => { if (busy.value || (dirty.value && !window.confirm('Leave with unsaved changes? A draft is kept in this tab.'))) return false; stop(); persist(); return true; });
-const unsubscribe = session.onCleared(() => { stop(); try { sessionStorage.removeItem(draftKey); } catch { /* Storage may be disabled. */ } emit('close'); });
+const unsubscribe = session.onCleared(() => { stop(); try { sessionStorage.removeItem(draftKey);try{localStorage.removeItem(draftKey);}catch{} } catch { /* Storage may be disabled. */ } emit('close'); });
 document.addEventListener('visibilitychange', visibility);
 window.addEventListener('pagehide', pagehide);
 window.addEventListener('beforeunload', leaving);
-onBeforeUnmount(() => { stop(); unsubscribe(); document.removeEventListener('visibilitychange', visibility); window.removeEventListener('pagehide', pagehide); window.removeEventListener('beforeunload', leaving); });
+if(Capacitor.isNativePlatform())void App.addListener('appStateChange',state=>{if(!state.isActive&&(recording.value||starting.value))pause();}).then(listener=>{if(editorAlive)nativeListener=listener;else void listener.remove();});
+onBeforeUnmount(() => { editorAlive=false;stop();void nativeListener?.remove(); unsubscribe(); document.removeEventListener('visibilitychange', visibility); window.removeEventListener('pagehide', pagehide); window.removeEventListener('beforeunload', leaving); });
 </script>
 
 <style scoped>
+.indoor-metrics { font-variant-numeric:tabular-nums; }.floor-transition { padding:12px; background:#ffffff10; border:1px solid #ffffff30; border-radius:9px; }.checkpoint-toggle { display:flex; align-items:center; gap:8px; }.checkpoint-toggle input { width:20px; min-height:20px; margin:0; }.instruction-preview { padding:14px 14px 14px 36px; background:#f3f7ff; border-radius:10px; color:#29496e; font-size:14px; line-height:1.8; }
+.workspace.manual-workspace { grid-template-columns: 1fr; }
+.recording-choice { margin: 0 28px 20px; display: flex; align-items: center; gap: 10px; }
+.recording-choice input { width: 20px; min-height: 20px; margin: 0; }
+summary { cursor: pointer; color: #526880; font-size: 13px; }
 .editor { --editor-border: #e0e7f0; --editor-muted: #61758b; padding: 0; margin: 0 auto 24px; max-width: 1240px; color: #172f4d; background: #fff; border: 1px solid var(--editor-border); border-radius: 16px; overflow: clip; box-shadow: 0 4px 20px #142e4c06; }
 .editor *, .editor *::before, .editor *::after { box-sizing: border-box; }
 .back-bar { padding: 18px 28px 0; }

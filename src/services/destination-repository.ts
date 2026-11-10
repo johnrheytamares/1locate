@@ -1,3 +1,4 @@
+import { parseIndoorJourney, type IndoorJourney } from '../../shared/indoor-tracking';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { DESTINATIONS } from '@/data/destinations';
 import type { DestinationDetails, DestinationImage, DisplayImage, ImageBucket } from '@/models/campus';
@@ -109,7 +110,9 @@ export function toDestination(row: unknown): Destination | null {
   }
 
   const rawRoute = record.indoor_route;
-  if (!Array.isArray(rawRoute) || rawRoute.length === 0 || rawRoute.length > MAX_ROUTE_STEPS) return null;
+  let indoorJourney: IndoorJourney | undefined;
+  if(record.indoor_journey!=null){try{indoorJourney=parseIndoorJourney(record.indoor_journey);if(indoorJourney.destinationId!==id||indoorJourney.status!=='validated'||record.building_id&&indoorJourney.buildingId!==record.building_id)return null;}catch{return null;}}
+  if (!Array.isArray(rawRoute) || (!rawRoute.length && !indoorJourney) || rawRoute.length > MAX_ROUTE_STEPS) return null;
   const indoorRoute = rawRoute.map(routeStep);
   if (indoorRoute.some((step) => step == null)) return null;
 
@@ -125,6 +128,7 @@ export function toDestination(row: unknown): Destination | null {
       arrivalRadius: radius,
     },
     indoorRoute: indoorRoute as RouteStep[],
+    ...(indoorJourney?{indoorJourney}:{}),
   };
 }
 
@@ -227,7 +231,8 @@ function validated(rows: unknown[], map: (row: unknown) => Destination | null): 
 export async function fetchDestinations(client: SupabaseClient | null = supabase): Promise<DestinationLoadResult> {
   if (!client) return local('Supabase is not configured', false);
   try {
-    const catalog = await query(client, 'navigation_catalog', CATALOG_COLUMNS);
+    let catalog = await query(client, 'navigation_catalog', `${CATALOG_COLUMNS}, indoor_journey`);
+    if(catalog.error && ['42703','PGRST204'].includes(catalog.error.code||''))catalog=await query(client,'navigation_catalog',CATALOG_COLUMNS);
     if (!catalog.error) {
       const result = validated(catalog.data, toCatalogDestination);
       if (typeof result !== 'string') cacheRows(catalog.data, true);
@@ -237,7 +242,8 @@ export async function fetchDestinations(client: SupabaseClient | null = supabase
     }
     if (!isMissingRelation(catalog.error)) return local(catalog.error.message, true);
 
-    const legacy = await query(client, 'destinations', LEGACY_COLUMNS);
+    let legacy = await query(client, 'destinations', `${LEGACY_COLUMNS}, indoor_journey`);
+    if(legacy.error && ['42703','PGRST204'].includes(legacy.error.code||''))legacy=await query(client,'destinations',LEGACY_COLUMNS);
     if (legacy.error) return local(legacy.error.message, true);
     const result = validated(legacy.data, toDestination);
     if (typeof result !== 'string') cacheRows(legacy.data, false);

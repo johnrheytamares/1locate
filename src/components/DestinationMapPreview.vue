@@ -19,7 +19,7 @@
 </template>
 
 <script setup lang="ts">
-import { parseOutdoorGraph } from '../../shared/outdoor-graph';
+import { loadOutdoorNetwork } from '@/services/route-package-cache';
 import type { CampusMap } from '../../shared/campus-map';
 import { gpsToImage } from '../../shared/campus-map';
 import CampusMapCanvas from '../../shared/CampusMapCanvas.vue';
@@ -85,7 +85,7 @@ async function updateRoute() {
     emit('route', result); renderRoute(); recenter();
     routeMessage.value = result.source === 'campus' ? 'Campus walking route. Check access and crossings on site.' : 'OpenStreetMap walking route. Campus paths and access may be incomplete.';
   } catch {
-    if (!disposed && controller === routeAbort) routeMessage.value = 'Walking route unavailable. Check your connection or try Update my location. No path has been inferred.';
+    if (!disposed && controller === routeAbort) routeMessage.value = 'Walking route unavailable. Entrance proximity is a straight-line GPS estimate, not a walkable route. Check network coverage, entrance GPS, or try Update my location.';
   } finally { clearTimeout(timeout); }
 }
 const target = computed(() => surveyedTarget(props.entrance));
@@ -237,9 +237,7 @@ async function loadReferenceMap() {
   const controller = new AbortController(); referenceAbort = controller;
   const timeout = setTimeout(() => controller.abort(), 12000);
   try {
-    const response = await fetch(`${import.meta.env.BASE_URL}campus-walking-network.json`, { signal: controller.signal });
-    if (!response.ok) return;
-    const graph = parseOutdoorGraph(await response.json());
+    const graph = await loadOutdoorNetwork(controller.signal);
     if (!disposed && !controller.signal.aborted) { referenceMap.value = graph.referenceMap ?? null; referenceVerified.value = graph.verified; }
   } catch { /* Reference image is optional; route errors are reported by the route session. */ }
   finally { clearTimeout(timeout); }

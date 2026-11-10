@@ -1,7 +1,8 @@
+import { mergeStraightInstructions, parseIndoorJourney, type IndoorInstruction, type IndoorJourney, type IndoorMeasurement, type StrideProfile } from '../../../shared/indoor-tracking';
 import type { Building, Room } from '@/types';
 
-export interface EditableStep { direction: string; distance: number }
-export interface SavedStep { id: number; direction: 'straight' | 'left' | 'right'; distance: number; mode: 'indoor' }
+export interface EditableStep { direction: string; distance: number; kind?: IndoorInstruction['kind']; checkpoint?: boolean; floorId?: string; floorName?: string; level?: number; method?: IndoorMeasurement; calibration?: StrideProfile; recordedAt?: string }
+export interface SavedStep { id: number; direction: 'straight' | 'left' | 'right'; distance: number; mode: 'indoor'; checkpoint?: boolean; method?: IndoorMeasurement; calibration?: StrideProfile; recordedAt?: string }
 
 export function validatedRoute(steps: EditableStep[]): SavedStep[] {
   if (!steps.length || steps.length > 50) throw new Error('Enter 1–50 route segments.');
@@ -9,9 +10,18 @@ export function validatedRoute(steps: EditableStep[]): SavedStep[] {
     if (!['straight', 'left', 'right'].includes(step.direction) || !Number.isFinite(step.distance) || step.distance <= 0 || step.distance > 500) {
       throw new Error(`Segment ${index + 1}: choose a direction and a distance above 0 and at most 500 meters.`);
     }
-    return { id: index + 1, direction: step.direction as SavedStep['direction'], distance: step.distance, mode: 'indoor' };
+    if (step.kind && step.kind !== 'walk') throw new Error('Save floor transitions as a version 2 indoor journey, not as walking meters.');
+    return { id: index + 1, direction: step.direction as SavedStep['direction'], distance: step.distance, mode: 'indoor', ...(step.checkpoint ? {checkpoint:true}:{}), ...(step.method ? {method:step.method}:{}), ...(step.calibration ? {calibration:step.calibration}:{}), ...(step.recordedAt ? {recordedAt:step.recordedAt}:{}) };
   });
 }
+
+export function hasFloorTransitions(steps: EditableStep[]) { return steps.some(s=>s.kind&&s.kind!=='walk'); }
+export function buildIndoorJourney(destinationId:string, buildingId:string, floorId:string|null, steps:EditableStep[], validated=false):IndoorJourney {
+  const instructions=steps.map(s=>({...s,kind:s.kind||'walk',direction:s.direction as 'straight'|'left'|'right'}));
+  if(instructions.at(-1)?.kind!=='arrived')instructions.push({kind:'arrived',direction:'straight',distance:0,checkpoint:true});
+  return parseIndoorJourney({version:2,destinationId,buildingId,floorId,routeType:'indoor',status:validated?'validated':'draft',recordedAt:new Date().toISOString(),instructions});
+}
+export function mergeStraightSteps(steps:EditableStep[]):EditableStep[] { return mergeStraightInstructions(steps.map(s=>({...s,kind:s.kind||'walk',direction:s.direction as 'straight'|'left'|'right'}))); }
 
 export function destinationPayload(id: string, room: Room, building: Building, steps: EditableStep[]) {
   const key = id.trim();
@@ -22,7 +32,7 @@ export function destinationPayload(id: string, room: Room, building: Building, s
   return {
     id: key, room_id: room.id, name: room.name, type: room.type, building: building.name,
     entrance_name: entrance, entrance_lat: building.entrance_lat, entrance_lng: building.entrance_lng,
-    arrival_radius: building.arrival_radius, indoor_route: validatedRoute(steps), is_active: false,
+    arrival_radius: building.arrival_radius, indoor_route: hasFloorTransitions(steps) ? [] : validatedRoute(steps), ...(hasFloorTransitions(steps)?{indoor_journey:buildIndoorJourney(key,building.id,room.floor_id,steps)}:{}), is_active: false,
     sort_order: room.sort_order,
   };
 }

@@ -311,6 +311,7 @@
 </template>
 
 <script setup lang="ts">
+import { authorizeIndoorJourney } from '@/services/journey.service';
 import { computed, nextTick, onUnmounted, ref, watch } from 'vue';
 import {
   IonAlert,
@@ -848,6 +849,8 @@ function onAtEntrance() {
 }
 
 function enterIndoor() {
+  const chosen=getSelectedDestination();
+  if(chosen?.indoorJourney){authorizeIndoorJourney(chosen.id);void ionRouter.replace(`/indoor-journey/${encodeURIComponent(chosen.id)}`);return;}
   const indoor = loadSelectedRoute();
   if (!indoor) {
     ionRouter.replace('/destinations');

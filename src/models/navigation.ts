@@ -33,6 +33,7 @@ export interface Destination {
   type: string;
   outdoorTarget: OutdoorTarget;
   indoorRoute: RouteStep[];
+  indoorJourney?: import('../../shared/indoor-tracking').IndoorJourney;
   /** Present when the destination came from the campus catalog. */
   details?: DestinationDetails;
 }

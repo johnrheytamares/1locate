@@ -1,10 +1,27 @@
 /// <reference types="vitest" />
 import vue from '@vitejs/plugin-vue';
+import { readFileSync } from 'node:fs';
 import { fileURLToPath, URL } from 'node:url';
 import { defineConfig } from 'vite';
 
 export default defineConfig({
-  plugins: [vue({ template: { transformAssetUrls: { includeAbsolute: false } } })],
+  plugins: [{
+    name: 'mobile-walking-network',
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        const path = req.url?.split('?')[0];
+        if (path !== '/campus-walking-network.json' && path !== '/images/updated_map.png') return next();
+        try {
+          res.setHeader('Content-Type', path.endsWith('.png') ? 'image/png' : 'application/json');
+          res.end(readFileSync(new URL(`../public${path}`, import.meta.url)));
+        } catch { res.statusCode = 404; res.end('Network not found'); }
+      });
+    },
+    generateBundle() {
+      this.emitFile({ type: 'asset', fileName: 'images/updated_map.png', source: readFileSync(new URL('../public/images/updated_map.png', import.meta.url)) });
+      this.emitFile({ type: 'asset', fileName: 'campus-walking-network.json', source: readFileSync(new URL('../public/campus-walking-network.json', import.meta.url), 'utf8') });
+    },
+  }, vue({ template: { transformAssetUrls: { includeAbsolute: false } } })],
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),

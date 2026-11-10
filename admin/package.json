@@ -21,6 +21,7 @@
     "@capacitor/app": "^8.1.2",
     "@capacitor/browser": "^8.0.5",
     "@capacitor/core": "^8.5.3",
+    "@capacitor/geolocation": "^8.2.4",
     "@supabase/supabase-js": "^2.118.0",
     "vue": "^3.5.0",
     "vue-router": "^5.0.0"

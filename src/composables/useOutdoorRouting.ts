@@ -39,7 +39,8 @@ export function useOutdoorRouting(state: Ref<OutdoorState>, active: Ref<boolean>
     if (progress.value.remaining <= 3) return 'Mapped path ends here. Check the entrance sign and confirm when you are there.';
     if (!headingUsable.value) return 'Phone direction is unavailable or stale. Use the highlighted map path; arrows are paused.';
     if (direction.value !== 'straight') return `Turn ${direction.value} to face the walking path`;
-    return 'Follow the walking path toward the entrance';
+    const nextTurn = route.value.instructions?.find(turn => turn.index > progress.value!.segment && turn.direction !== 'straight');
+    return nextTurn ? `Follow the walking path. At the marked checkpoint, turn ${nextTurn.direction}.` : 'Follow the walking path toward the entrance';
   });
   async function plan(force = false) {
     now.value = Date.now();

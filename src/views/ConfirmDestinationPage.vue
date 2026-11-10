@@ -59,7 +59,7 @@
             <li class="steps-fact">
               <span class="fact-icon" aria-hidden="true"><ion-icon :icon="walkOutline" /></span>
               <span class="fact-label">Steps</span>
-              <span class="fact-value">{{ destination.indoorRoute.length }} steps</span>
+              <span class="fact-value">{{ (destination.indoorJourney?.instructions.length || destination.indoorRoute.length) }} steps</span>
             </li>
             <li class="distance-fact">
               <span class="fact-icon" aria-hidden="true"><ion-icon :icon="swapHorizontalOutline" /></span>

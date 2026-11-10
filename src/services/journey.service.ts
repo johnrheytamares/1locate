@@ -5,7 +5,7 @@ export interface ArrivalRecord { destination: Destination; evidence: 'room-confi
 let arrival: ArrivalRecord | null = null;
 export function reviewDestination(id: string) { reviewedId = id; }
 export function wasDestinationReviewed(id: string) { return reviewedId === id; }
-export function beginJourney(id: string) { reviewedId = id; testJourney = false; arrival = null; }
+export function beginJourney(id: string) { indoorEntranceId=null; reviewedId = id; testJourney = false; arrival = null; }
 export function markTestJourney() { testJourney = true; }
 export function isTestJourney() { return testJourney; }
 export function confirmRoomArrival(destination: Destination): ArrivalRecord | null {
@@ -14,4 +14,10 @@ export function confirmRoomArrival(destination: Destination): ArrivalRecord | nu
   return arrival;
 }
 export function getArrival() { return arrival; }
-export function clearJourney() { reviewedId = null; arrival = null; testJourney = false; }
+export function clearJourney() { indoorEntranceId=null; reviewedId = null; arrival = null; testJourney = false; }
+
+let indoorEntranceId: string | null = null;
+export function authorizeIndoorJourney(id:string){indoorEntranceId=id;}
+export function hasIndoorJourneyEntrance(id:string){return indoorEntranceId===id && wasDestinationReviewed(id);}
+
+export function clearIndoorJourneyEntrance(){indoorEntranceId=null;}

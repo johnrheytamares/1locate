@@ -86,6 +86,7 @@ export interface DestinationRecord {
   is_active: boolean;
   sort_order: number;
   indoor_route: RouteStepRecord[] | null;
+  indoor_journey?: import('../../shared/indoor-tracking').IndoorJourney | null;
 }
 
 export interface MapLabel {

@@ -11,13 +11,17 @@ export function createDestination(payload: ReturnType<typeof import('@/lib/route
 }
 
 export function saveDestinationRoute(id: string, route: import('@/lib/route-editor').SavedStep[], client: Client = supabase): Promise<DestinationRecord> {
-  return changed(requireClient(client).from('destinations').update({ indoor_route: route, is_active: false }).eq('id', id).select(DESTINATION_COLUMNS));
+  return changed(requireClient(client).from('destinations').update({ indoor_route: route, indoor_journey: null, is_active: false }).eq('id', id).select(DESTINATION_COLUMNS));
 }
 
 const BUILDING_COLUMNS = 'id, code, name, description, entrance_name, entrance_lat, entrance_lng, arrival_radius, is_active, sort_order, created_at, updated_at';
 const FLOOR_COLUMNS = 'id, building_id, level, name, created_at, updated_at';
 const ROOM_COLUMNS = 'id, building_id, floor_id, name, room_number, type, description, is_active, sort_order, created_at, updated_at';
-const DESTINATION_COLUMNS = 'id, name, building, type, entrance_name, room_id, is_active, sort_order, indoor_route';
+export function saveDestinationJourney(id: string, journey: import('../../../shared/indoor-tracking').IndoorJourney, client: Client = supabase): Promise<DestinationRecord> {
+  return changed(requireClient(client).from('destinations').update({ indoor_journey: journey, indoor_route: [], is_active: false }).eq('id', id).select(DESTINATION_COLUMNS));
+}
+
+const DESTINATION_COLUMNS = 'id, name, building, type, entrance_name, room_id, is_active, sort_order, indoor_route, indoor_journey';
 const ROLE_COLUMNS = 'user_id, role, granted_by, created_at, updated_at';
 
 interface Result<T> {

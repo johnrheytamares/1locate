@@ -169,6 +169,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, reactive, ref } from 'vue';
 import DestinationEditor from '@/components/DestinationEditor.vue';
+import { parseIndoorJourney } from '../../../shared/indoor-tracking';
 import { validatedRoute } from '@/lib/route-editor';
 import {
   isVisible,
@@ -308,7 +309,7 @@ async function onSaveLink(destination: DestinationRecord) {
 async function onToggleActive(destination: DestinationRecord) {
   if (!destination.is_active) {
     try {
-      validatedRoute((destination.indoor_route ?? []).map(s => ({ direction: String(s.direction), distance: Number(s.distance) })));
+      if(destination.indoor_journey){const journey=parseIndoorJourney(destination.indoor_journey);if(journey.status!=='validated')throw new Error('Review the floor transitions on site and save the validated journey before turning it on.');}else validatedRoute((destination.indoor_route ?? []).map(s => ({ direction: String(s.direction), distance: Number(s.distance) })));
     } catch (err) { error.value = (err as Error).message; return; }
     if (!window.confirm('Have you verified this route on site? Turning it on requires a published linked room and building for catalog visibility.')) return;
   }

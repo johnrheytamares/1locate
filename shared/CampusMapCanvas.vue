@@ -2,11 +2,12 @@
   <div class="campus-image" :class="{ editing: editable }">
     <img :src="map.image" alt="Campus infrastructure reference map" @click="choose" />
     <svg viewBox="0 0 1000 1000" preserveAspectRatio="none" aria-hidden="true">
-      <line v-for="(edge, index) in lines" :key="`edge-${index}`" :x1="edge.a.x * 1000" :y1="edge.a.y * 1000" :x2="edge.b.x * 1000" :y2="edge.b.y * 1000" :class="{ closed: !edge.open }" />
-      <polyline v-if="routePoints" :points="routePoints" class="active-route" />
+      <polyline v-for="(edge, index) in lines" :key="`edge-${index}`" :points="edge.points" class="network-line" :class="{ closed: !edge.open, pending: edge.pending }" />
+      <polyline v-if="routePoints" :points="routePoints" class="active-route" :class="routeStatus" />
     </svg>
     <span v-for="(anchor, index) in map.anchors" :key="`anchor-${index}`" class="pin anchor" :style="position(anchor)">{{ index + 1 }}</span>
-    <span v-for="node in visibleNodes" :key="node.id" class="pin node" :class="{ entrance: node.entrance }" :style="position(node.point)" :title="node.name">{{ node.name }}</span>
+    <button v-if="editable" v-for="node in visibleNodes" :key="`edit-${node.id}`" type="button" class="pin node selectable" :class="{ selected: selected === node.id, entrance: node.entrance }" :style="position(node.point)" :aria-label="`Connect ${node.name || node.id}`" :aria-pressed="selected === node.id" @click.stop="emit('node', node.id)">{{ node.name || node.id }}</button>
+    <span v-for="node in editable ? [] : visibleNodes" :key="node.id" class="pin node" :class="{ entrance: node.entrance }" :style="position(node.point)" :title="node.name">{{ node.name }}</span>
     <span v-if="userPoint && inside(userPoint)" class="pin user" :style="position(userPoint)" title="Estimated GPS location">●</span>
   </div>
 </template>
@@ -14,16 +15,18 @@
 import { computed } from 'vue';
 import { gpsToImage, validImagePoint, type CampusMap, type ImagePoint } from './campus-map';
 import type { OutdoorNode, OutdoorEdge, Point } from './outdoor-graph';
-const props = defineProps<{ map: CampusMap; nodes?: OutdoorNode[]; edges?: OutdoorEdge[]; route?: [number, number][]; user?: Point | null; editable?: boolean }>();
-const emit = defineEmits<{ point: [point: ImagePoint] }>();
+const props = defineProps<{ map: CampusMap; nodes?: OutdoorNode[]; edges?: OutdoorEdge[]; route?: [number, number][]; user?: Point | null; editable?: boolean; selected?: string; routeStatus?: 'selected' | 'review' | 'invalid' }>();
+const emit = defineEmits<{ point: [point: ImagePoint]; node: [id: string] }>();
 const inside = validImagePoint;
 const position = (p: ImagePoint) => ({ left: `${p.x * 100}%`, top: `${p.y * 100}%` });
 const visibleNodes = computed(() => (props.nodes ?? []).flatMap(node => {
   const point = gpsToImage(props.map, node); return point && inside(point) ? [{ ...node, point }] : [];
 }));
 const lines = computed(() => (props.edges ?? []).flatMap(edge => {
-  const a = visibleNodes.value.find(n => n.id === edge.from)?.point, b = visibleNodes.value.find(n => n.id === edge.to)?.point;
-  return a && b ? [{ a, b, open: edge.open }] : [];
+  const a = props.nodes?.find(n => n.id === edge.from), b = props.nodes?.find(n => n.id === edge.to);
+  if (!a || !b) return [];
+  const points = (edge.geometry || [a, b]).map(p => gpsToImage(props.map, p));
+  return points.some(p => !p || !inside(p)) ? [] : [{ points: points.map(p => `${p!.x * 1000},${p!.y * 1000}`).join(' '), open: edge.open, pending: edge.validation === 'draft' }];
 }));
 const userPoint = computed(() => props.user ? gpsToImage(props.map, props.user) : null);
 const routePoints = computed(() => {
@@ -41,8 +44,11 @@ function choose(event: MouseEvent) {
 .campus-image { position:relative; width:100%; overflow:hidden; background:#edf2f6; }
 img { display:block; width:100%; height:auto; } .editing img { cursor:crosshair; }
 svg { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
-line { stroke:#0f766e; stroke-width:3; vector-effect:non-scaling-stroke; } line.closed { stroke:#b91c1c; stroke-dasharray:6 5; }
+.network-line { fill:none; stroke:#0f766e; stroke-width:3; vector-effect:non-scaling-stroke; } .network-line.closed { stroke:#b91c1c; stroke-dasharray:6 5; }
+.network-line.pending { stroke:#ea880c; }
 .active-route { stroke:#2563eb; stroke-width:6; fill:none; stroke-linejoin:round; vector-effect:non-scaling-stroke; }
+.active-route.review { stroke:#ea880c; }.active-route.invalid { stroke:#b91c1c; stroke-dasharray:6 4; }
 .pin { position:absolute; transform:translate(-50%,-50%); pointer-events:none; font-size:10px; font-weight:700; border:2px solid white; border-radius:8px; padding:2px 4px; color:white; background:#0f766e; max-width:110px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .anchor { background:#b45309; font-size:13px; z-index:2; } .entrance { background:#b91c1c; } .user { background:#1d4ed8; border-radius:50%; z-index:3; }
+.selectable { pointer-events:auto; cursor:pointer; min-height:44px; min-width:44px; z-index:4; } .selected { outline:3px solid #2563eb; background:#1d4ed8; }
 </style>
