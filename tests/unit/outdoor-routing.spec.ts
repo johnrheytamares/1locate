@@ -1,4 +1,5 @@
 import { describe, expect, test, vi, afterEach } from 'vitest';
+vi.mock('@/services/supabase', () => ({ supabase: null }));
 import { campusWalkingRoute, parseOutdoorGraph, type OutdoorGraph } from '../../shared/outdoor-graph';
 import { outdoorRouteProgress } from '@/services/outdoor-progress.service';
 import { fetchOutdoorRoute } from '@/services/outdoor-route.service';

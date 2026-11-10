@@ -113,7 +113,368 @@ begin
     -- Only Image 3 room/building/floor relationships were explicitly confirmed.
     if point.image_group is distinct from 'image_3' or point.kind not in ('room', 'office') then
       continue;
-    end if;
+    end if;Run npm run test
+
+> 1locate-admin@0.1.0 test
+> vitest run
+
+
+ RUN  v4.0.18 /home/runner/work/1locate/1locate/admin
+
+ ✓ tests/campus.spec.ts (23 tests) 21ms
+ ✓ tests/auth.spec.ts (16 tests) 49ms
+ ✓ tests/photos.spec.ts (21 tests) 54ms
+ ✓ tests/validation.spec.ts (30 tests) 21ms
+ ✓ tests/feedback.spec.ts (10 tests) 445ms
+ ❯ tests/camera-route.spec.ts (7 tests | 3 failed) 472ms
+     × records relative turns, rejects repeated zero-distance taps, then saves the existing draft schema 239ms
+     ✓ stops and reacquires the camera on pause/resume and restores the old route on cancel 66ms
+     ✓ falls back to manual entry after camera denial and no motion support 65ms
+     ✓ cleans a camera that resolves after the editor is closed 28ms
+     × confirms only dirty exits and leaves an active recording intact if navigation is rejected 15ms
+     × ignores stationary samples and credits only sustained pulses, then releases the camera on unmount 29ms
+     ✓ pauses on backgrounding without losing the active segment 30ms
+ ✓ tests/account-auth.spec.ts (8 tests) 17ms
+ ✓ tests/views.spec.ts (5 tests) 368ms
+stderr | tests/outdoor-routes.spec.ts > does not invent campus coordinates and refuses unverified exports
+[VUE_ROUTER_R0020] No active route record was found when calling `onBeforeRouteLeave()`. Maybe you called it inside of App.vue?
+├▶ fix: Call it from a component rendered inside <router-view> (a page component or one of its children), not from App.vue.
+╰▶ see: https://router.vuejs.org/guide/advanced/composition-api.html#Navigation-Guards
+
+stderr | tests/outdoor-routes.spec.ts > imports a network for review and previews its shortest route without publishing
+[VUE_ROUTER_R0020] No active route record was found when calling `onBeforeRouteLeave()`. Maybe you called it inside of App.vue?
+├▶ fix: Call it from a component rendered inside <router-view> (a page component or one of its children), not from App.vue.
+╰▶ see: https://router.vuejs.org/guide/advanced/composition-api.html#Navigation-Guards
+
+stderr | tests/outdoor-routes.spec.ts > network edits clear survey confirmation
+[VUE_ROUTER_R0020] No active route record was found when calling `onBeforeRouteLeave()`. Maybe you called it inside of App.vue?
+├▶ fix: Call it from a component rendered inside <router-view> (a page component or one of its children), not from App.vue.
+╰▶ see: https://router.vuejs.org/guide/advanced/composition-api.html#Navigation-Guards
+
+ ✓ tests/indoor-graph.spec.ts (8 tests) 12ms
+stderr | tests/outdoor-routes.spec.ts > places walking nodes on the school image only after GPS calibration
+[VUE_ROUTER_R0020] No active route record was found when calling `onBeforeRouteLeave()`. Maybe you called it inside of App.vue?
+├▶ fix: Call it from a component rendered inside <router-view> (a page component or one of its children), not from App.vue.
+╰▶ see: https://router.vuejs.org/guide/advanced/composition-api.html#Navigation-Guards
+
+stderr | tests/outdoor-routes.spec.ts > does not create a GPS node by clicking an uncalibrated school map
+[VUE_ROUTER_R0020] No active route record was found when calling `onBeforeRouteLeave()`. Maybe you called it inside of App.vue?
+├▶ fix: Call it from a component rendered inside <router-view> (a page component or one of its children), not from App.vue.
+ ❯ tests/outdoor-routes.spec.ts (5 tests | 5 failed) 324ms
+╰▶ see: https://router.vuejs.org/guide/advanced/composition-api.html#Navigation-Guards
+   × does not invent campus coordinates and refuses unverified exports 122ms
+   × imports a network for review and previews its shortest route without publishing 44ms
+   × network edits clear survey confirmation 38ms
+   × places walking nodes on the school image only after GPS calibration 60ms
+   × does not create a GPS node by clicking an uncalibrated school map 58ms
+
+ ✓ tests/route-editor.spec.ts (5 tests) 14ms
+ ✓ tests/destination-links.spec.ts (4 tests) 8ms
+ ❯ tests/destination-editor.spec.ts (2 tests | 2 failed) 147ms
+     × validates before saving and retains the draft after a request fails 91ms
+     × stops recording when sensors produce no usable samples and cleans listeners 54ms
+ ✓ tests/destination-workspace.spec.ts (1 test) 127ms
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 10 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/camera-route.spec.ts > camera route recording > records relative turns, rejects repeated zero-distance taps, then saves the existing draft schema
+AssertionError: expected "vi.fn()" to be called with arguments: [ 'd', [ { id: 1, …(3) }, …(2) ] ]
+
+Received: 
+
+  1st vi.fn() call:
+
+@@ -3,21 +3,27 @@
+    [
+      {
+        "direction": "straight",
+        "distance": 6.2,
+        "id": 1,
++       "method": "manual",
+        "mode": "indoor",
++       "recordedAt": "2026-11-10T09:00:53.294Z",
+      },
+      {
+        "direction": "left",
+        "distance": 1.6,
+        "id": 2,
++       "method": "manual",
+        "mode": "indoor",
++       "recordedAt": "2026-11-10T09:00:53.326Z",
+      },
+      {
+        "direction": "right",
+        "distance": 3.4,
+        "id": 3,
++       "method": "manual",
+        "mode": "indoor",
++       "recordedAt": "2026-11-10T09:00:53.349Z",
+      },
+    ],
+  ]
+
+
+Number of calls: 1
+
+ ❯ tests/camera-route.spec.ts:58:24
+     56|     mocks.save.mockResolvedValue({ ...destination, is_active: false });
+     57|     await button(wrapper, 'Save inactive draft').trigger('click'); awa…
+     58|     expect(mocks.save).toHaveBeenCalledWith('d', [
+       |                        ^
+     59|       { id: 1, direction: 'straight', distance: 6.2, mode: 'indoor' },
+     60|       { id: 2, direction: 'left', distance: 1.6, mode: 'indoor' },
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/10]⎯
+
+ FAIL  tests/camera-route.spec.ts > camera route recording > confirms only dirty exits and leaves an active recording intact if navigation is rejected
+AssertionError: expected "bound " to not be called at all, but actually been called 1 times
+
+Received: 
+
+  1st bound  call:
+
+    Array [
+      "Leave with unsaved changes? A draft is kept in this tab for recovery.",
+    ]
+
+
+Number of calls: 1
+
+ ❯ tests/camera-route.spec.ts:96:32
+     94|     vi.mocked(window.confirm).mockClear();
+     95|     await button(wrapper, 'Back to Destinations').trigger('click');
+     96|     expect(window.confirm).not.toHaveBeenCalled();
+       |                                ^
+     97|     await start(wrapper);
+     98|     vi.mocked(window.confirm).mockReturnValue(false);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/10]⎯
+
+ FAIL  tests/camera-route.spec.ts > camera route recording > ignores stationary samples and credits only sustained pulses, then releases the camera on unmount
+AssertionError: expected '↑ Straight0.00 mManually measured dis…' to contain '0.70 m'
+
+Expected: "0.70 m"
+Received: "↑ Straight0.00 mManually measured distance"
+
+ ❯ tests/camera-route.spec.ts:120:76
+    118|     await flushPromises(); expect(wrapper.find('.camera-distance').tex…
+    119|     sample(0, 2800); sample(2, 2820); sample(0, 2920);
+    120|     await flushPromises(); expect(wrapper.find('.camera-distance').tex…
+       |                                                                            ^
+    121|     wrapper.unmount(); expect(stop).toHaveBeenCalledTimes(1);
+    122|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/10]⎯
+
+ FAIL  tests/destination-editor.spec.ts > destination editor > validates before saving and retains the draft after a request fails
+TypeError: Cannot read properties of undefined (reading 'trigger')
+ ❯ tests/destination-editor.spec.ts:23:31
+     21|     expect(mocks.create).not.toHaveBeenCalled();
+     22|     expect(wrapper.text()).toContain('1–50');
+     23|     await button('Add segment').trigger('click');
+       |                               ^
+     24|     mocks.create.mockRejectedValue({ code: '23505' });
+     25|     await button('Save inactive draft').trigger('click'); await flushP…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/10]⎯
+
+ FAIL  tests/destination-editor.spec.ts > destination editor > stops recording when sensors produce no usable samples and cleans listeners
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ tests/destination-editor.spec.ts:44:72
+     42|     expect(wrapper.text()).toMatch(/No usable motion samples|Motion se…
+     43|     wrapper.unmount();
+     44|     expect(remove.mock.calls.some(args => args[0] === 'devicemotion'))…
+       |                                                                        ^
+     45|     remove.mockRestore();
+     46|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/10]⎯
+
+ FAIL  tests/outdoor-routes.spec.ts > does not invent campus coordinates and refuses unverified exports
+TypeError: Cannot read properties of undefined (reading 'trigger')
+ ❯ tests/outdoor-routes.spec.ts:13:68
+     11| test('does not invent campus coordinates and refuses unverified export…
+     12|   const wrapper = mount(OutdoorRoutesView);
+     13|   await wrapper.findAll('button').find(b => b.text() === 'Add node')!.…
+       |                                                                    ^
+     14|   expect((wrapper.find('[aria-label="Latitude"]').element as HTMLInput…
+     15|   await wrapper.findAll('button').find(b => b.text() === 'Export verif…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/10]⎯
+
+ FAIL  tests/outdoor-routes.spec.ts > imports a network for review and previews its shortest route without publishing
+TypeError: Cannot read properties of undefined (reading 'trigger')
+ ❯ tests/outdoor-routes.spec.ts:22:77
+     20|   const wrapper = mount(OutdoorRoutesView);
+     21|   await wrapper.find('textarea').setValue(JSON.stringify(network));
+     22|   await wrapper.findAll('button').find(b => b.text() === 'Import JSON …
+       |                                                                             ^
+     23|   expect(wrapper.text()).toContain('Network imported for review');
+     24|   await wrapper.find('[aria-label="Starting node"]').setValue('start');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/10]⎯
+
+ FAIL  tests/outdoor-routes.spec.ts > network edits clear survey confirmation
+TypeError: Cannot read properties of undefined (reading 'trigger')
+ ❯ tests/outdoor-routes.spec.ts:36:77
+     34|   const wrapper = mount(OutdoorRoutesView);
+     35|   await wrapper.find('textarea').setValue(JSON.stringify(network));
+     36|   await wrapper.findAll('button').find(b => b.text() === 'Import JSON …
+       |                                                                             ^
+     37|   const confirmation = wrapper.find('p label input[type="checkbox"]');
+     38|   await confirmation.setValue(true);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/10]⎯
+
+ FAIL  tests/outdoor-routes.spec.ts > places walking nodes on the school image only after GPS calibration
+TypeError: Cannot read properties of undefined (reading 'trigger')
+ ❯ tests/outdoor-routes.spec.ts:53:77
+     51|   ] };
+     52|   await wrapper.find('textarea').setValue(JSON.stringify({ ...network,…
+     53|   await wrapper.findAll('button').find(b => b.text() === 'Import JSON …
+       |                                                                             ^
+     54|   await wrapper.find('[aria-label="Map editing mode"]').setValue('node…
+     55|   wrapper.findComponent(CampusMapCanvas).vm.$emit('point', { x: 0.5, y…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/10]⎯
+
+ FAIL  tests/outdoor-routes.spec.ts > does not create a GPS node by clicking an uncalibrated school map
+TypeError: Cannot read properties of undefined (reading 'trigger')
+ ❯ tests/outdoor-routes.spec.ts:67:77
+     65|   const wrapper = mount(OutdoorRoutesView);
+     66|   await wrapper.find('textarea').setValue(JSON.stringify({ ...network,…
+     67|   await wrapper.findAll('button').find(b => b.text() === 'Import JSON …
+       |                                                                             ^
+     68|   await wrapper.find('[aria-label="Map editing mode"]').setValue('node…
+     69|   wrapper.findComponent(CampusMapCanvas).vm.$emit('point', { x: 0.5, y…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/10]⎯
+
+
+ Test Files  3 failed | 11 passed (14)
+      Tests  10 failed | 135 passed (145)
+   Start at  09:00:50
+   Duration  6.32s (transform 2.12s, setup 0ms, import 5.03s, tests 2.08s, environment 7.98s)
+
+
+Error: AssertionError: expected "vi.fn()" to be called with arguments: [ 'd', [ { id: 1, …(3) }, …(2) ] ]
+
+Received: 
+
+  1st vi.fn() call:
+
+@@ -3,21 +3,27 @@
+    [
+      {
+        "direction": "straight",
+        "distance": 6.2,
+        "id": 1,
++       "method": "manual",
+        "mode": "indoor",
++       "recordedAt": "2026-11-10T09:00:53.294Z",
+      },
+      {
+        "direction": "left",
+        "distance": 1.6,
+        "id": 2,
++       "method": "manual",
+        "mode": "indoor",
++       "recordedAt": "2026-11-10T09:00:53.326Z",
+      },
+      {
+        "direction": "right",
+        "distance": 3.4,
+        "id": 3,
++       "method": "manual",
+        "mode": "indoor",
++       "recordedAt": "2026-11-10T09:00:53.349Z",
+      },
+    ],
+  ]
+
+
+Number of calls: 1
+
+ ❯ tests/camera-route.spec.ts:58:24
+
+
+
+Error: AssertionError: expected "bound " to not be called at all, but actually been called 1 times
+
+Received: 
+
+  1st bound  call:
+
+    Array [
+      "Leave with unsaved changes? A draft is kept in this tab for recovery.",
+    ]
+
+
+Number of calls: 1
+
+ ❯ tests/camera-route.spec.ts:96:32
+
+
+
+Error: AssertionError: expected '↑ Straight0.00 mManually measured dis…' to contain '0.70 m'
+
+Expected: "0.70 m"
+Received: "↑ Straight0.00 mManually measured distance"
+
+ ❯ tests/camera-route.spec.ts:120:76
+
+
+
+Error: TypeError: Cannot read properties of undefined (reading 'trigger')
+ ❯ tests/destination-editor.spec.ts:23:31
+
+
+
+Error: AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ tests/destination-editor.spec.ts:44:72
+
+
+
+Error: TypeError: Cannot read properties of undefined (reading 'trigger')
+ ❯ tests/outdoor-routes.spec.ts:13:68
+
+
+
+Error: TypeError: Cannot read properties of undefined (reading 'trigger')
+ ❯ tests/outdoor-routes.spec.ts:22:77
+
+
+
+Error: TypeError: Cannot read properties of undefined (reading 'trigger')
+ ❯ tests/outdoor-routes.spec.ts:36:77
+
+
+
+Error: TypeError: Cannot read properties of undefined (reading 'trigger')
+ ❯ tests/outdoor-routes.spec.ts:53:77
+
+
+
+Error: TypeError: Cannot read properties of undefined (reading 'trigger')
+ ❯ tests/outdoor-routes.spec.ts:67:77
+
+
+Error: Process completed with exit code 1.
+
 
     -- Match equivalent labels while preserving the existing floor ID, name and level.
     -- "First Floor" is deliberately not guessed to mean Ground or Second Floor.

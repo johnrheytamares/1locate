@@ -136,6 +136,18 @@
           <ion-button size="small" fill="outline" data-test="map-view" @click="toggleMap">{{ mapVisible ? 'Camera View' : 'Map View' }}</ion-button>
           <ion-button size="small" fill="outline" data-test="stop-navigation" @click="chooseAnotherDestination">Stop</ion-button>
           <ion-button v-if="stage === 'indoor' && !navigation.paused && !arrived" size="small" fill="outline" @click="showCheckpoint = true">Confirm checkpoint</ion-button>
+            <ion-button
+              v-if="
+                stage === 'indoor' &&
+                !navigation.paused &&
+                !arrived &&
+                needsTurn(navigation)
+              "
+              size="small"
+              color="primary"
+              @click="confirmTurn">
+              I completed the turn
+            </ion-button>
         </div>
         <p v-if="isOutdoor" class="evidence-note" role="status">{{ outdoorRouting.message.value }} {{ outdoorRouting.route.value?.source === 'campus' ? 'Campus walking network.' : outdoorRouting.route.value ? 'OpenStreetMap route; check access on site.' : '' }} Camera arrows are direction overlays, not ground-anchored AR.</p>
         <ion-button v-if="isOutdoor" size="small" fill="outline" :disabled="outdoorRouting.status.value === 'loading'" @click="outdoorRouting.retry">Retry walking route</ion-button>
@@ -698,6 +710,22 @@ watch(
     syncTurnAlignment();
   },
 );
+
+function confirmTurn() {
+  if (
+    stage.value !== 'indoor' ||
+    navigation.value.paused ||
+    !needsTurn(navigation.value)
+  ) {
+    return;
+  }
+
+  clearAlignTimer();
+
+  navigation.value = completeCurrentTurn(
+    navigation.value
+  );
+}
 
 function clearAlignTimer() {
   if (alignTimer == null) return;

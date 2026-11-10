@@ -344,3 +344,17 @@ describe('getDestinationImageUrls', () => {
     expect(await getDestinationImageUrls([], storageClient(async () => { throw new Error('unused'); }))).toEqual([]);
   });
 });
+
+
+test('loads a validated floor journey without flattening stairs into legacy walking meters',()=>{
+ const journey={version:2,destinationId:'registrar',buildingId:BUILDING_ID,floorId:'second',routeType:'indoor',status:'validated',recordedAt:new Date().toISOString(),instructions:[
+ {kind:'walk',direction:'straight',distance:10},
+ {kind:'upstairs',direction:'straight',distance:0,floorId:'second',floorName:'Second floor',level:2},
+ {kind:'arrive-floor',direction:'straight',distance:0,floorId:'second',floorName:'Second floor',level:2},
+ {kind:'arrived',direction:'straight',distance:0}]};
+ const converted=toDestination(catalogRow({indoor_route:[],indoor_journey:journey}));
+ expect(converted?.indoorRoute).toEqual([]);expect(converted?.indoorJourney?.instructions).toHaveLength(4);
+ expect(toDestination(catalogRow({indoor_route:[],indoor_journey:{...journey,status:'draft'}}))).toBeNull();
+ expect(toDestination(catalogRow({indoor_route:[],indoor_journey:{...journey,buildingId:'other'}}))).toBeNull();
+ expect(toDestination(catalogRow({indoor_route:[],indoor_journey:{...journey,instructions:journey.instructions.filter(s=>s.kind!=='arrive-floor')}}))).toBeNull();
+});

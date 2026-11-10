@@ -6,7 +6,9 @@
       <polyline v-if="routePoints" :points="routePoints" class="active-route" :class="routeStatus" />
     </svg>
     <span v-for="(anchor, index) in map.anchors" :key="`anchor-${index}`" class="pin anchor" :style="position(anchor)">{{ index + 1 }}</span>
-    <button v-if="editable" v-for="node in visibleNodes" :key="`edit-${node.id}`" type="button" class="pin node selectable" :class="{ selected: selected === node.id, entrance: node.entrance }" :style="position(node.point)" :aria-label="`Connect ${node.name || node.id}`" :aria-pressed="selected === node.id" @click.stop="emit('node', node.id)">{{ node.name || node.id }}</button>
+    <template v-if="editable">
+    <button v-for="node in visibleNodes" :key="`edit-${node.id}`" type="button" class="pin node selectable" :class="{ selected: selected === node.id, entrance: node.entrance }" :style="position(node.point)" :aria-label="`Connect ${node.name || node.id}`" :aria-pressed="selected === node.id" @click.stop="emit('node', node.id)">{{ node.name || node.id }}</button>
+    </template>
     <span v-for="node in editable ? [] : visibleNodes" :key="node.id" class="pin node" :class="{ entrance: node.entrance }" :style="position(node.point)" :title="node.name">{{ node.name }}</span>
     <span v-if="userPoint && inside(userPoint)" class="pin user" :style="position(userPoint)" title="Estimated GPS location">●</span>
   </div>

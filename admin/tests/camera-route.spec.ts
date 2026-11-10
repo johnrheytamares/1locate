@@ -33,6 +33,14 @@ async function distance(wrapper: ReturnType<typeof editor>, value: number) {
 }
 beforeEach(() => {
   vi.clearAllMocks(); sessionStorage.clear();
+  // Isolate the durable draft and calibration store as well as session storage.
+  const stored = new Map<string,string>();
+  vi.stubGlobal('localStorage', {
+    getItem: (key:string) => stored.get(key) ?? null,
+    setItem: (key:string,value:string) => { stored.set(key,value); },
+    removeItem: (key:string) => { stored.delete(key); },
+    clear: () => stored.clear(),
+  });
   vi.spyOn(window, 'confirm').mockReturnValue(true);
   vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue();
   stop = vi.fn();

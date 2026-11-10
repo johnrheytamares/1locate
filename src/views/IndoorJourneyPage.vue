@@ -11,18 +11,60 @@ import { startRearPreview,stopRearPreview } from '@/services/camera.service';
 import { useIndoorWalking } from '@/composables/useIndoorWalking';
 import type { Destination } from '@/models/navigation';
 import { parseIndoorJourney,type IndoorJourney } from '../../shared/indoor-tracking';
+
 const route=useRoute(),router=useIonRouter(),destination=ref<Destination|null>(null),journey=ref<IndoorJourney|null>(null),index=ref(0),walked=ref(0),paused=ref(false),error=ref(''),cameraMessage=ref(''),open=ref(false);let cameraGeneration=0;
 const instruction=computed(()=>journey.value?.instructions[index.value]);
 const walking=useIndoorWalking(()=>!open.value||paused.value||instruction.value?.kind!=='walk'||walked.value>=instruction.value.distance?'Confirm the current checkpoint before walking.':null,meters=>{if(instruction.value?.kind==='walk'&&!paused.value)walked.value=Math.min(instruction.value.distance,walked.value+meters);});
 const label=computed(()=>{const s=instruction.value;if(!s)return '';if(s.kind==='walk')return s.direction==='left'?'Turn left, then walk':s.direction==='right'?'Turn right, then walk':'Continue straight';return ({upstairs:'Go Upstairs',downstairs:'Go Downstairs',elevator:'Use Elevator','arrive-floor':'Arrive at Floor',arrived:'Arrived at Destination'}[s.kind])+(s.floorName?` — ${s.floorName}`:'');});
 async function camera(){const request=++cameraGeneration;try{await startRearPreview();if(request!==cameraGeneration||!open.value){await stopRearPreview();return;}document.documentElement.classList.add('indoor-journey-camera');cameraMessage.value='';}catch(reason){if(request===cameraGeneration)cameraMessage.value=(reason as Error).message;}}
+function beginTracking() {
+  if (
+    open.value &&
+    !paused.value &&
+    instruction.value?.kind === 'walk'
+  ) {
+    void walking.start();
+  }
+}
 function stop(){cameraGeneration++;walking.stop();document.documentElement.classList.remove('indoor-journey-camera');void stopRearPreview();}
-function confirm(){if(paused.value||!instruction.value)return;if(instruction.value.kind==='arrived'){if(destination.value&&confirmRoomArrival(destination.value)){stop();void router.replace('/arrival');}return;}walking.stop();index.value++;walked.value=0;}
-function togglePause(){paused.value=!paused.value;if(paused.value)stop();else void camera();}
+function confirm() {
+  if (paused.value || !instruction.value) return;
+
+  if (instruction.value.kind === 'arrived') {
+    if (
+      destination.value &&
+      confirmRoomArrival(destination.value)
+    ) {
+      stop();
+      void router.replace('/arrival');
+    }
+    return;
+  }
+
+  walking.stop();
+  index.value++;
+  walked.value = 0;
+
+  // Automatically track the next walking segment.
+  beginTracking();
+}
+
+function togglePause() {
+  paused.value = !paused.value;
+
+  if (paused.value) {
+    stop();
+    return;
+  }
+
+  void camera();
+  beginTracking();
+}
+
 function restart(){if(!window.confirm('Return physically to the building entrance and start the outdoor/entrance confirmation again?'))return;stop();void router.replace('/ar-navigation');}
 function exit(){stop();void router.replace('/destinations');}
 function hidden(){if(document.hidden&&open.value){paused.value=true;stop();}}
-onIonViewDidEnter(()=>{const id=String(route.params.id||'');if(!hasIndoorJourneyEntrance(id)){void router.replace(`/destinations/${encodeURIComponent(id)}`);return;}const selected=getDestination(id);try{if(!selected?.indoorJourney)throw new Error('This destination has no supported indoor journey.');const parsed=parseIndoorJourney(selected.indoorJourney);if(parsed.status!=='validated')throw new Error('This indoor journey is not published.');destination.value=selected;journey.value=parsed;index.value=0;walked.value=0;paused.value=false;open.value=true;void camera();}catch(reason){error.value=(reason as Error).message;void router.replace('/destinations');}});
+onIonViewDidEnter(()=>{const id=String(route.params.id||'');if(!hasIndoorJourneyEntrance(id)){void router.replace(`/destinations/${encodeURIComponent(id)}`);return;}const selected=getDestination(id);try{if(!selected?.indoorJourney)throw new Error('This destination has no supported indoor journey.');const parsed=parseIndoorJourney(selected.indoorJourney);if(parsed.status!=='validated')throw new Error('This indoor journey is not published.');destination.value=selected;journey.value=parsed;index.value=0;walked.value=0;paused.value=false;open.value=true;void camera(); beginTracking();}catch(reason){error.value=(reason as Error).message;void router.replace('/destinations');}});
 onIonViewWillLeave(()=>{open.value=false;clearIndoorJourneyEntrance();stop();});document.addEventListener('visibilitychange',hidden);onBeforeUnmount(()=>{open.value=false;stop();document.removeEventListener('visibilitychange',hidden);});
 </script>
 <style scoped>
