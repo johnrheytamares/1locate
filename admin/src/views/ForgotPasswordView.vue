@@ -1,25 +1,31 @@
 <template>
-  <div class="center-page"><form class="card narrow" @submit.prevent="submit">
-    <h1>Reset password</h1>
+  <div class="center-page"><form class="card narrow auth-card" @submit.prevent="submit">
+    <header class="auth-header">
+      <img class="login-brand-logo" src="/images/1locate-logo.png" alt="1Locate logo" />
+      <h1>{{ step === 'done' ? 'Password updated' : 'Reset password' }}</h1>
+      <p v-if="step === 'email'" class="muted">Enter your account email and we'll send you a reset code.</p>
+      <p v-else-if="step === 'code'" class="muted">If an account exists for <strong>{{ email }}</strong>, a code is on its way. Check your spam folder too.</p>
+      <p v-else-if="step === 'password'" class="muted">Choose a new password for your account.</p>
+    </header>
     <p v-if="error" class="notice error" role="alert">{{ error }}</p>
-    <p v-if="message" class="notice" role="status">{{ message }}</p>
+    <p v-if="message" class="notice ok" role="status">{{ message }}</p>
     <template v-if="step === 'email'">
-      <p class="muted">Enter your account email to request a password reset code.</p>
-      <div class="field"><label for="reset-email">Email</label><input id="reset-email" v-model="email" :disabled="busy" type="email" autocomplete="username" maxlength="254" required /></div>
+      <div class="field"><label for="reset-email">Email</label><input id="reset-email" v-model="email" :disabled="busy" type="email" autocomplete="username" maxlength="254" placeholder="you@example.com" required /></div>
     </template>
     <template v-else-if="step === 'code'">
-      <p class="muted">If an account exists for {{ email }}, a reset code will arrive by email. Check your spam folder too.</p>
-      <div class="field"><label for="reset-code">Email code</label><input id="reset-code" v-model="token" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6,10}" maxlength="10" required /></div>
-      <button type="button" class="secondary" :disabled="busy || cooldown > 0" @click="send">{{ cooldown ? `Resend in ${cooldown}s` : 'Resend code' }}</button>
-      <button type="button" class="secondary" :disabled="busy" @click="step = 'email'; token = ''; message = ''">Change email</button>
+      <div class="field"><label for="reset-code">Reset code</label><input id="reset-code" v-model="token" class="code-input" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6,10}" maxlength="10" placeholder="Enter code" required /></div>
     </template>
     <template v-else-if="step === 'password'">
       <div class="field"><label for="new-password">New password</label><input id="new-password" v-model="password" type="password" autocomplete="new-password" minlength="12" maxlength="128" required /></div>
       <div class="field"><label for="confirm-password">Confirm password</label><input id="confirm-password" v-model="confirmation" type="password" autocomplete="new-password" minlength="12" maxlength="128" required /></div>
-      <p class="muted">Use at least 12 characters. Your account may require additional password rules.</p>
+      <p class="auth-hint">Use at least 12 characters.</p>
     </template>
-    <div v-if="step !== 'done'" class="form-actions"><button type="submit" :disabled="busy || (step === 'email' && cooldown > 0)">{{ busy ? 'Please wait...' : step === 'email' ? 'Send reset code' : step === 'code' ? 'Verify code' : 'Save password' }}</button></div>
-    <RouterLink to="/login">Back to sign in</RouterLink>
+    <button v-if="step !== 'done'" type="submit" class="auth-submit" :disabled="busy || (step === 'email' && cooldown > 0)">{{ busy ? 'Please wait...' : step === 'email' ? 'Send reset code' : step === 'code' ? 'Verify code' : 'Save password' }}</button>
+    <div v-if="step === 'code'" class="auth-secondary-row">
+      <button type="button" class="secondary" :disabled="busy || cooldown > 0" @click="send">{{ cooldown ? `Resend in ${cooldown}s` : 'Resend code' }}</button>
+    </div>
+    <RouterLink v-if="step === 'done'" to="/login" class="button auth-submit">Back to sign in</RouterLink>
+    <div v-else class="auth-footer"><RouterLink to="/login" class="auth-link">← Back to sign in</RouterLink></div>
   </form></div>
 </template>
 <script setup lang="ts">
@@ -63,5 +69,6 @@ async function submit() {
 onBeforeUnmount(() => { disposed = true; clearInterval(timer); password.value = ''; confirmation.value = ''; token.value = ''; if (recoveryVerified) void session.signOut(); });
 </script>
 <style scoped>
-.field { margin: 14px 0; }.secondary { margin: 10px 8px 10px 0; }a { display: inline-block; margin-top: 16px; }
+.code-input { font-size: 18px; letter-spacing: 0.2em; text-align: center; }
+.code-input::placeholder { font-size: 15px; letter-spacing: normal; }
 </style>
