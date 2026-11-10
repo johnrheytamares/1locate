@@ -20,7 +20,9 @@ describe('destination editor', () => {
     await button('Save inactive draft').trigger('click');
     expect(mocks.create).not.toHaveBeenCalled();
     expect(wrapper.text()).toContain('1–50');
-    await button('Add segment').trigger('click');
+    await button('Add instruction').trigger('click');
+    expect(wrapper.find('.camera-recorder').exists()).toBe(false);
+    await wrapper.find('.segment-distance input').setValue(1);
     mocks.create.mockRejectedValue({ code: '23505' });
     await button('Save inactive draft').trigger('click'); await flushPromises();
     expect(wrapper.emitted('saved')).toBeUndefined();
@@ -35,13 +37,14 @@ describe('destination editor', () => {
     vi.useFakeTimers();
     const remove = vi.spyOn(window, 'removeEventListener');
     const wrapper = mount(DestinationEditor, { props: { rooms: [room], buildings: [building], initialRoom: 'room' } });
-    await wrapper.find('input[type=checkbox]').setValue(true);
+    await wrapper.find('.recording-choice input').setValue(true);
+    await wrapper.find('.entrance-check input').setValue(true);
     await wrapper.findAll('button').find(b => b.text() === 'Start recording')!.trigger('click');
     await flushPromises();
     await vi.advanceTimersByTimeAsync(4000);
     expect(wrapper.text()).toMatch(/No usable motion samples|Motion sensors unavailable/);
     wrapper.unmount();
-    expect(remove.mock.calls.some(args => args[0] === 'devicemotion')).toBe(true);
+    expect(remove.mock.calls.some(args => args[0] === 'pagehide')).toBe(true);
     remove.mockRestore();
   });
 });

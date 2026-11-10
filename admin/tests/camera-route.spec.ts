@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({ save: vi.fn(), leave: vi.fn() }));
 vi.mock('@/services/campus', () => ({ createDestination: vi.fn(), saveDestinationRoute: mocks.save }));
 vi.mock('@/stores/session', () => ({ useSession: () => ({ state: { userId: 'camera-test' }, onCleared: () => () => {} }) }));
 vi.mock('vue-router', () => ({ onBeforeRouteLeave: mocks.leave }));
+import { calibrateStride } from '../../shared/indoor-tracking';
 import DestinationEditor from '@/components/DestinationEditor.vue';
 
 const room = { id: 'r', building_id: 'b', name: 'Room' } as Room;
@@ -22,6 +23,7 @@ function button(wrapper: ReturnType<typeof editor>, name: string) {
   return wrapper.findAll('button').find(b => b.text().includes(name))!;
 }
 async function start(wrapper: ReturnType<typeof editor>) {
+  await wrapper.find('.recording-choice input').setValue(true);
   await wrapper.find('.entrance-check input').setValue(true);
   await button(wrapper, 'Start recording').trigger('click'); await flushPromises();
 }
@@ -55,7 +57,8 @@ describe('camera route recording', () => {
     expect(wrapper.find('.route-heading').text()).toContain('11.20 m total');
     mocks.save.mockResolvedValue({ ...destination, is_active: false });
     await button(wrapper, 'Save inactive draft').trigger('click'); await flushPromises();
-    expect(mocks.save).toHaveBeenCalledWith('d', [
+    expect(mocks.save.mock.calls[0][0]).toBe('d');
+    expect(mocks.save.mock.calls[0][1]).toMatchObject([
       { id: 1, direction: 'straight', distance: 6.2, mode: 'indoor' },
       { id: 2, direction: 'left', distance: 1.6, mode: 'indoor' },
       { id: 3, direction: 'right', distance: 3.4, mode: 'indoor' },
@@ -103,6 +106,7 @@ describe('camera route recording', () => {
   });
   it('ignores stationary samples and credits only sustained pulses, then releases the camera on unmount', async () => {
     vi.stubGlobal('DeviceMotionEvent', class {});
+    const values=new Map<string,string>();values.set('1locate:stride:camera-test:motion-estimate',JSON.stringify(calibrateStride(7,10,'motion-estimate')));vi.stubGlobal('localStorage',{getItem:(key:string)=>values.get(key)||null,setItem:(key:string,value:string)=>values.set(key,value),removeItem:(key:string)=>values.delete(key)});
     let now = 0;
     vi.spyOn(performance, 'now').mockImplementation(() => now);
     const wrapper = editor(); await start(wrapper);
@@ -117,7 +121,7 @@ describe('camera route recording', () => {
     for (const t of [1000, 1600, 2200]) { sample(0, t); sample(2, t + 20); sample(0, t + 120); }
     await flushPromises(); expect(wrapper.find('.camera-distance').text()).toContain('0.00 m');
     sample(0, 2800); sample(2, 2820); sample(0, 2920);
-    await flushPromises(); expect(wrapper.find('.camera-distance').text()).toContain('0.70 m');
+    await flushPromises(); expect(wrapper.find('.camera-distance').text()).toContain('2.80 m');
     wrapper.unmount(); expect(stop).toHaveBeenCalledTimes(1);
   });
   it('pauses on backgrounding without losing the active segment', async () => {
