@@ -20,7 +20,7 @@
         <div><span class="eyebrow">STARTING POINT</span><strong>{{ building?.entrance_name || 'Set the building entrance name first' }}</strong><small>{{ building?.name || 'Choose a linked room to get started' }}</small></div>
       </div>
       <label v-if="recordingMode" class="entrance-check" :class="{ confirmed: atEntrance }"><input v-model="atEntrance" type="checkbox" /> <span><strong>I am at this entrance</strong><small>Facing the first corridor, ready to walk.</small></span></label>
-      <IndoorStepCalibration :disabled="recording || paused || starting || busy" v-if="recordingMode" :user="session.state.userId || 'local'" @calibrated="calibrated" @activity="calibrating = $event" /><label v-if="recordingMode && availableFloors.length">Starting floor<select v-model="currentFloor" :disabled="recording || starting"><option value="">Choose starting floor</option><option v-for="floor in availableFloors" :key="floor.id" :value="floor.id">{{ floor.name }}</option></select></label><label v-if="recordingMode" class="stride-field"><span>Walking step length</span><span class="unit-input"><input :value="profile?.stride || ''" readonly type="number" min="0.2" max="1.5" step="0.01" inputmode="decimal" /><span aria-hidden="true">m / step</span></span><small>{{ profile ? 'Saved calibration on this device.' : 'Complete a measured calibration walk to enable automatic distance.' }}</small></label>
+      <IndoorStepCalibration v-if="recordingMode" :disabled="recording || paused || starting || busy" :user="session.state.userId || 'local'" @calibrated="calibrated" @activity="calibrating = $event" /><label v-if="recordingMode && availableFloors.length">Starting floor<select v-model="currentFloor" :disabled="recording || starting"><option value="">Choose starting floor</option><option v-for="floor in availableFloors" :key="floor.id" :value="floor.id">{{ floor.name }}</option></select></label><label v-if="recordingMode" class="stride-field"><span>Walking step length</span><span class="unit-input"><input :value="profile?.stride || ''" readonly type="number" min="0.2" max="1.5" step="0.01" inputmode="decimal" /><span aria-hidden="true">m / step</span></span><small>{{ profile ? 'Saved calibration on this device.' : 'Complete a measured calibration walk to enable automatic distance.' }}</small></label>
     </fieldset>
     </section>
     <section v-if="recordingMode" class="recorder-panel">
@@ -73,7 +73,7 @@
       <div v-for="(step, index) in steps" :key="index" class="segment">
         <div class="segment-caption"><span>{{ String(index + 1).padStart(2, '0') }}</span><strong>Step {{ index + 1 }}</strong></div>
         <label v-if="!step.kind || step.kind === 'walk'" class="segment-direction">Direction <span class="sr-only">for segment {{ index + 1 }}</span><select v-model="step.direction"><option value="straight">Continue Straight</option><option value="left">Turn Left</option><option value="right">Turn Right</option></select></label>
-        <p v-if="step.kind && step.kind !== 'walk'">{{ instructionLabel(step) }} · Confirmed checkpoint</p><label v-if="!step.kind || step.kind === 'walk'" class="segment-distance">Distance <span class="sr-only">for segment {{ index + 1 }} in meters</span><span class="unit-input"><input v-model.number="step.distance" @change="step.method = 'manual'; step.calibration = undefined" type="number" min="0.01" max="500" step="0.01" inputmode="decimal" /><span aria-hidden="true">m</span></span></label>
+        <p v-if="step.kind && step.kind !== 'walk'">{{ instructionLabel(step) }} · Confirmed checkpoint</p><label v-if="!step.kind || step.kind === 'walk'" class="segment-distance">Distance <span class="sr-only">for segment {{ index + 1 }} in meters</span><span class="unit-input"><input v-model.number="step.distance" type="number" min="0.01" max="500" step="0.01" inputmode="decimal" @change="step.method = 'manual'; step.calibration = undefined" /><span aria-hidden="true">m</span></span></label>
         <label v-if="!step.kind || step.kind === 'walk'" class="checkpoint-toggle"><input v-model="step.checkpoint" type="checkbox" /> Keep this checkpoint (door / landmark)</label><div class="segment-actions">
           <button type="button" :disabled="index === 0" aria-label="Move segment up" title="Move segment up" @click="move(index, -1)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 12 6-6 6 6M12 6v13" /></svg></button>
           <button type="button" :disabled="index === steps.length - 1" aria-label="Move segment down" title="Move segment down" @click="move(index, 1)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 12 6 6 6-6M12 18V5" /></svg></button>
@@ -288,7 +288,7 @@ async function save() {
       const payload=destinationPayload(id.value,room,building.value,steps.value);if(payload.indoor_journey)payload.indoor_journey=buildIndoorJourney(id.value,building.value.id,room.floor_id,steps.value,routeChecked.value);saved = await createDestination(payload);
     }
 
-    try { sessionStorage.removeItem(draftKey);try{localStorage.removeItem(draftKey);}catch{} } catch { /* Storage may be disabled. */ }
+    try { sessionStorage.removeItem(draftKey);try{localStorage.removeItem(draftKey);}catch{ /* Local draft storage may be unavailable. */ } } catch { /* Storage may be disabled. */ }
     emit('saved', saved);
   } catch (err) { error.value = err instanceof Error ? err.message : describeError(err); }
   finally { busy.value = false; }
@@ -297,7 +297,7 @@ function visibility() { if (document.hidden && (recording.value || starting.valu
 function pagehide() { if (recording.value || starting.value) pause(); }
 function leaving(event: BeforeUnloadEvent) { if (dirty.value) { event.preventDefault(); event.returnValue = ''; } }
 onBeforeRouteLeave(() => { if (busy.value || (dirty.value && !window.confirm('Leave with unsaved changes? A draft is kept in this tab.'))) return false; stop(); persist(); return true; });
-const unsubscribe = session.onCleared(() => { stop(); try { sessionStorage.removeItem(draftKey);try{localStorage.removeItem(draftKey);}catch{} } catch { /* Storage may be disabled. */ } emit('close'); });
+const unsubscribe = session.onCleared(() => { stop(); try { sessionStorage.removeItem(draftKey);try{localStorage.removeItem(draftKey);}catch{ /* Local draft storage may be unavailable. */ } } catch { /* Storage may be disabled. */ } emit('close'); });
 document.addEventListener('visibilitychange', visibility);
 window.addEventListener('pagehide', pagehide);
 window.addEventListener('beforeunload', leaving);
