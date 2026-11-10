@@ -1,3 +1,5 @@
+import {readWalkingValidation,clearWalkingValidation} from '@/services/walking-validation';
+import type {IndoorMeasurement} from '../../shared/indoor-tracking';
 import { WalkingPulseDetector, stepMethodLabel } from '../../shared/indoor-tracking';
 import { reactive, ref } from 'vue';
 import { Capacitor } from '@capacitor/core';
@@ -40,6 +42,7 @@ export interface WalkingDiagnostics {
 export interface WalkingOptions {
   /** Collects sensor readouts for the debug panel. Leave off in release builds. */
   diagnostics?: boolean;
+  requireValidation?: boolean;
 }
 
 function vector(value: DeviceMotionEventAcceleration | null | undefined): Vector | null {
@@ -58,6 +61,16 @@ export function useIndoorWalking(
 ) {
   const stepLength = ref(DEFAULT_STEP_LENGTH_METERS);
   const enabled = ref(false);
+  const sensorMethod=ref<IndoorMeasurement|null>(null),rawEvents=ref(0),detectedSteps=ref(0),creditedSteps=ref(0),estimatedMeters=ref(0),trackingState=ref('stopped'),validationRequired=ref(false);
+  function credit(steps:number,method:IndoorMeasurement){
+    if(!Number.isInteger(steps)||steps<=0||steps>100){reportUnreliable();message.value='Unexpected sensor step batch. Use checkpoint navigation and repeat this phone’s walking check.';return;}
+    sensorMethod.value=method;detectedSteps.value+=steps;
+    if(options.requireValidation){const verified=readWalkingValidation(method);if(!verified){validationRequired.value=true;trackingState.value='checkpoint only';if(diagnostics)diagnostics.lastReason='unverified sensor events: checkpoint only';message.value='Step events are unverified. Complete this phone’s walking check or use manual checkpoints. Shaking can trigger sensor events.';return;}stepLength.value=verified.profile.stride;stepLengthSource='saved';if(diagnostics)diagnostics.stepLengthSource='saved';validationRequired.value=false;}
+    trackingState.value='estimated walking';creditedSteps.value+=steps;estimatedMeters.value+=steps*stepLength.value;
+    if(diagnostics)diagnostics.acceptedSteps+=steps;onStep(steps*stepLength.value);
+  }
+  function reportUnreliable(){stop();clearWalkingValidation();validationRequired.value=true;trackingState.value='checkpoint only';message.value='Automatic estimates disabled for this phone. Use physical checkpoints; repeat the walking check before enabling estimates.';}
+
   const message = ref('Automatic walking is ready. Default step length is 0.70 m; personal calibration is optional.');
   let stepLengthSource: WalkingDiagnostics['stepLengthSource'] = 'default';
   let detector = new WalkingPeaks();
@@ -91,6 +104,7 @@ export function useIndoorWalking(
     : null;
 
   function note(reason: string) {
+    trackingState.value=reason;
     if (diagnostics) diagnostics.lastReason = reason;
   }
 
@@ -149,10 +163,11 @@ export function useIndoorWalking(
     if (!enabled.value) return;
     const now = performance.now();
     const reading = linearAcceleration(event, now);
+    rawEvents.value++;sensorMethod.value='motion-estimate';
     if (!reading) return;
     clearTimeout(timer);
     timer = setTimeout(() => { stop(); message.value = 'Motion data stopped. Use manual controls or enable walking again.'; }, 5000);
-    message.value = 'Automatic walking enabled. Distance is estimated from detected steps.';
+    if(!validationRequired.value)message.value = 'Automatic walking enabled. Distance is estimated from detected steps.';
     const { x, y, z } = reading.value;
     const magnitude = Math.hypot(x, y, z);
     readout(event, reading.value, magnitude, reading.source, now);
@@ -174,15 +189,14 @@ export function useIndoorWalking(
     if (result.reason) note(result.reason);
     if (result.steps > 0) {
       if (diagnostics) {
-        diagnostics.acceptedSteps += result.steps;
         diagnostics.lastReason = 'step accepted';
       }
-      onStep(result.steps * stepLength.value);
+      credit(result.steps,'motion-estimate');
     }
   }
   function stop() {
     generation += 1;
-    enabled.value = false;
+    enabled.value = false;trackingState.value='stopped';
     message.value = 'Automatic walking stopped. Enable it again to continue.';
     clearTimeout(timer);
     window.removeEventListener('devicemotion', motion);
@@ -193,7 +207,8 @@ export function useIndoorWalking(
     rateCount = 0;
   }
   async function start() {
-    stop();
+    stop();trackingState.value='starting';
+    validationRequired.value=!!options.requireValidation;
     if (Capacitor.isNativePlatform()) {
       const request = generation;
       try {
@@ -205,15 +220,18 @@ export function useIndoorWalking(
             const blocked = walkBlock() ?? (document.hidden ? 'app hidden' : null);
             if (blocked) { note(`blocked: ${blocked}`); return; }
             if (diagnostics) {
-              diagnostics.acceptedSteps += steps;
+              diagnostics.candidateSteps += steps;
               diagnostics.lastReason = `native ${method}: ${steps} step(s) accepted`;
             }
-            onStep(steps * stepLength.value);
+            credit(steps,method);
           },
-          status => { if (request === generation) message.value = status; },
+          status => {if(request!==generation)return;if(status==='paused'){stop();message.value='Sensor paused in the background. Resume at the same checkpoint.';}else if(!validationRequired.value)message.value=status;},
+          sample=>{if(request===generation){rawEvents.value++;if(sample.method)sensorMethod.value=sample.method;}},
         );
         if (request !== generation) return;
-        message.value = `${stepMethodLabel(method)} active. Walking distance is estimated from actual sensor steps.`;
+        sensorMethod.value=method;validationRequired.value=!!options.requireValidation&&!readWalkingValidation(method);
+        trackingState.value=validationRequired.value?'checkpoint only':'observing steps';
+        message.value=validationRequired.value?'This sensor is not yet checked on this phone. Use manual checkpoints or complete the walking check.':`${stepMethodLabel(method)} active. Step events estimate distance; they do not prove movement or hallway position.`;
         return;
       } catch (error) {
         if (request !== generation) return;
@@ -239,5 +257,5 @@ export function useIndoorWalking(
       if (request === generation) { stop(); message.value = 'Could not access motion sensors. Use manual controls.'; }
     }
   }
-  return { stepLength, enabled, message, diagnostics, calibrate, start, stop };
+  return { stepLength, enabled, message, diagnostics, calibrate, start, stop,sensorMethod,rawEvents,detectedSteps,creditedSteps,estimatedMeters,trackingState,validationRequired,reportUnreliable };
 }

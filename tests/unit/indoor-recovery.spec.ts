@@ -122,6 +122,12 @@ afterEach(() => {
   mocks.gpsSource = 'simulated';
 });
 
+
+function checkedMotionPhone(){
+ const value={version:1,profile:{version:1,method:'motion-estimate',distance:7,steps:10,stride:0.7,calibratedAt:new Date().toISOString()},independentSteps:10,checks:['standing','rotating','shaking'].map(activity=>({activity,durationMs:15000,steps:0}))};
+ vi.stubGlobal('localStorage',{getItem:(key:string)=>key==='1locate.walking-validation.v1'?JSON.stringify(value):null,setItem:vi.fn(),removeItem:vi.fn()});
+}
+
 describe('indoor route progress', () => {
   test('does not move before Set Forward', () => {
     selectDestination('registrar');
@@ -455,6 +461,7 @@ describe('Camera Navigation distance', () => {
   });
 
   test('the debug panel shows walking diagnostics from motion samples during development', async () => {
+    checkedMotionPhone();
     vi.stubGlobal('DeviceMotionEvent', class {});
     await enterIndoorDev();
     const panel = () => wrapper!.find('[data-test="walking-diagnostics"]').text();
@@ -551,6 +558,7 @@ describe('Camera Navigation in a release build', () => {
   });
 
   test('starts walking automatically and keeps only guide controls in release', async () => {
+    checkedMotionPhone();
     vi.stubGlobal('DeviceMotionEvent', class {});
     await mountRelease();
     const { startRearPreview } = await import('@/services/camera.service');

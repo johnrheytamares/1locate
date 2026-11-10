@@ -76,20 +76,6 @@
       </div>
 
       <template v-else>
-        <div v-if="isOutdoor" class="sheet">
-          <div class="instruction-banner">
-            <ion-icon :icon="paperPlaneOutline" aria-hidden="true" />
-            <strong>{{ instruction }}</strong>
-          </div>
-          <div v-if="isOutdoor" class="status-chips chips-row">
-            <span v-if="gpsSource === 'simulated'" class="chip sim">SIMULATED GPS</span>
-            <span v-if="outdoor.target?.source === 'test'" class="chip test">TEST target</span>
-            <span v-if="improvingAccuracy" class="chip pill">Improving GPS accuracy...</span>
-            <span v-if="gpsSource === 'real' && gpsStatus === 'tracking' && !gpsPrecise" class="chip pill">
-              Precise location is off
-            </span>
-          </div>
-        </div>
         <div v-if="!mapVisible" class="camera-frame">
           <span class="corner tl" /><span class="corner tr" /><span class="corner bl" /><span class="corner br" />
           <NavigationOverlay
@@ -105,7 +91,7 @@
       <div class="sheet" :class="{ 'guidance-sheet': !showMapWait }">
         <div v-if="!showMapWait" class="journey-card">
           <div class="journey-identity"><span class="journey-pin"><ion-icon :icon="location" aria-hidden="true" /></span><div><span class="dest-kicker">{{ isOutdoor ? 'Building entrance' : 'Destination' }}</span><h2>{{ markerName }}</h2><p data-test="journey-distance">{{ isOutdoor ? (outdoorRouting.progress.value ? 'Walking remaining' : 'Straight-line to entrance') : 'Est. remaining' }}: <strong>{{ distanceLabel }}</strong></p></div></div>
-          <div class="journey-instruction"><ion-icon :icon="paperPlaneOutline" aria-hidden="true" /><strong>{{ instruction }}</strong></div>
+          <div class="journey-instruction"><ion-icon :icon="paperPlaneOutline" aria-hidden="true" /><strong>{{ compactInstruction }}</strong></div>
         </div>
         <div v-if="cameraMessage && !mapVisible" class="camera-banner">
           <ion-icon :icon="cameraOutline" aria-hidden="true" />
@@ -132,15 +118,15 @@
           <strong>{{ distanceLabel }}</strong>
         </div>
 
-        <div class="navigation-controls">
+        <div class="navigation-controls" :class="{ 'outdoor-actions': isOutdoor }">
           <ion-button size="small" fill="outline" data-test="map-view" @click="toggleMap">{{ mapVisible ? 'Camera View' : 'Map View' }}</ion-button>
-          <ion-button size="small" fill="outline" data-test="stop-navigation" @click="chooseAnotherDestination">Stop</ion-button>
+          <ion-button v-if="isOutdoor" size="small" fill="outline" aria-label="Retry walking route" :disabled="outdoorRouting.status.value === 'loading'" @click="outdoorRouting.retry">Retry</ion-button>
+          <ion-button v-if="isOutdoor && !showMapWait" size="small" fill="solid" data-test="at-entrance" @click="onAtEntrance">At entrance</ion-button>
+          <ion-button size="small" fill="outline" class="stop-action" data-test="stop-navigation" @click="chooseAnotherDestination">Stop</ion-button>
           <ion-button v-if="stage === 'indoor' && !navigation.paused && !arrived" size="small" fill="outline" @click="showCheckpoint = true">Confirm checkpoint</ion-button>
           <ion-button v-if="stage === 'indoor' && !navigation.paused && !arrived && needsTurn(navigation)" size="small" color="primary" @click="confirmTurn">I completed the turn</ion-button>
         </div>
-        <p v-if="isOutdoor" class="evidence-note" role="status">{{ outdoorRouting.message.value }} {{ outdoorRouting.route.value?.source === 'campus' ? 'Campus walking network.' : outdoorRouting.route.value ? 'OpenStreetMap route; check access on site.' : '' }} Camera arrows are direction overlays, not ground-anchored AR.</p>
-        <ion-button v-if="isOutdoor" size="small" fill="outline" :disabled="outdoorRouting.status.value === 'loading'" @click="outdoorRouting.retry">Retry walking route</ion-button>
-        <ion-button v-if="isOutdoor && !showMapWait" size="small" fill="outline" data-test="at-entrance" @click="onAtEntrance">I'm at the entrance</ion-button>
+        <details v-if="isOutdoor" class="route-details"><summary>Route &amp; GPS details<span v-if="outdoor.raw">±{{ Math.round(outdoor.raw.accuracy) }} m</span></summary><p role="status">{{ instruction }}</p><p>{{ outdoorRouting.route.value?.source === 'campus' ? 'Campus walking network.' : outdoorRouting.route.value ? 'OpenStreetMap route; check access on site.' : 'No verified walking path yet.' }} Camera arrows are direction overlays, not ground-anchored AR.</p><p v-if="outdoor.target?.source === 'test' || gpsSource === 'simulated'">Test location · not real navigation.</p><p v-if="gpsSource === 'real' && gpsStatus === 'tracking' && !gpsPrecise">Enable Precise Location for a better GPS fix.</p></details>
         <p v-if="mapVisible && stage === 'indoor'" class="evidence-note">Satellite GPS is an outdoor reference only. It does not track the floor or room.</p>
         <p v-if="stage === 'indoor'" class="evidence-note">Indoor camera marker is informational only, not the physical room location. {{ manualProgress ? 'Progress includes user-confirmed checkpoints.' : 'Step-estimated route progress; not room positioning.' }}<template v-if="heading == null"> Heading unavailable. Follow the written route and confirm checkpoints.</template></p>
         <div v-if="stage === 'indoor' && arrived && !confirmingRestart" class="route-complete">
@@ -148,6 +134,8 @@
           <ion-button expand="block" @click="showArrival = true">Confirm destination</ion-button>
           <ion-button expand="block" fill="outline" @click="restartCompletedRoute">Restart from entrance</ion-button>
         </div>
+        <p v-if="showIndoorHelp && walking.validationRequired.value" class="evidence-note" role="status">Step estimates are unverified on this phone. Use Confirm checkpoint, or open Walking sensor &amp; calibration.</p>
+        <WalkingSensorCheck v-if="showIndoorHelp" :walking="walking" />
         <section v-if="showIndoorHelp" class="indoor-help">
           <template v-if="!navigation.paused">
             <div v-if="walkingUnavailable" class="walking-fallback" role="status">
@@ -188,7 +176,7 @@
             </ion-button>
           </div>
         </section>
-        <p v-if="isOutdoor && outdoor.raw" class="path-note">GPS Accuracy ±{{ Math.round(outdoor.raw.accuracy) }} m</p>
+
 
         <div v-if="devTools" class="debug" data-test="debug">
           <details>
@@ -358,6 +346,7 @@ import { confirmRoomArrival, markTestJourney, clearJourney } from '@/services/jo
 import { useArrivalFeedback } from '@/composables/useArrivalFeedback';
 import { LOCATION_RATIONALE, useOutdoorGps } from '@/composables/useOutdoorGps';
 import { useOutdoorRouting } from '@/composables/useOutdoorRouting';
+import WalkingSensorCheck from '@/components/navigation/WalkingSensorCheck.vue';
 import { useIndoorWalking } from '@/composables/useIndoorWalking';
 import { useVoice } from '@/composables/useVoice';
 import { SHOW_DEV_TOOLS } from '@/config/dev-tools';
@@ -433,7 +422,7 @@ const checkpointMessage = computed(() => {
 const walking = useIndoorWalking(
   () => walkBlock.value,
   (meters) => { navigation.value = moveForward(navigation.value, meters); },
-  { diagnostics: SHOW_DEV_TOOLS },
+  { diagnostics: SHOW_DEV_TOOLS,requireValidation:true },
 );
 const {
   enabled: walkingEnabled,
@@ -596,6 +585,14 @@ const instruction = computed(() => {
     return `The GPS location of ${entranceName.value} is not set yet. Walk to ${entranceName.value}, then tap I'm at the entrance.`;
   }
   return outdoorRouting.message.value;
+});
+
+const compactInstruction = computed(() => {
+  if (!isOutdoor.value || locationPrompt.value) return instruction.value;
+  if (outdoor.value.raw && outdoor.value.raw.accuracy > 20) return 'Waiting for better GPS';
+  if (!outdoor.value.location) return 'Finding your location';
+  if (outdoorRouting.status.value === 'error') return 'Walking route unavailable';
+  return instruction.value;
 });
 
 const arrows = computed(() => {
@@ -835,7 +832,7 @@ function enterIndoor() {
   confirmingRestart.value = false;
   stage.value = 'indoor';
   initializeForward();
-  if (!mapVisible.value) void walking.start();
+  void walking.start();
 }
 
 /** The indoor route starts only after the user confirms they are at the entrance. */
@@ -1558,11 +1555,36 @@ ion-alert.arrival-alert .alert-button-group .alert-button .alert-button-inner { 
 .navigation-layout .camera-frame { position: absolute; inset: 0; min-height: 0; margin: 0; height: 100%; }
 .navigation-layout > .sheet:first-of-type { z-index: 2; position: relative; margin: 8px 12px; border-radius: 16px; background: #f5faffeb; }
 .navigation-layout .guidance-sheet { position: absolute; z-index: 3; bottom: 0; left: 0; right: 0; max-height: 43%; overflow-y: auto; padding: 12px 16px max(10px, env(safe-area-inset-bottom)); }
-.navigation-layout .journey-card { padding: 0; }.journey-pin { width: 34px; height: 34px; }.journey-identity h2 { font-size: 16px; }.journey-instruction { margin-top: 7px; padding-top: 6px; }.navigation-controls { display: flex; flex-wrap: wrap; justify-content: center; gap: 2px; margin-top: 6px; }.navigation-controls ion-button { font-size: 11px; min-height: 34px; text-transform: none; }.evidence-note { margin: 4px 0; font-size: 10px; color: #526b82; }.simulation-notice { position: relative; z-index: 5; padding: 8px; background: #fff2c9; color: #724500; text-align: center; font-weight: 700; font-size: 12px; }.map-guidance > .map-preview { position: absolute; inset: 0; padding-bottom: 210px; }.route-complete p { font-size: 12px; }
+.navigation-layout .journey-card { padding: 0; }.journey-pin { width: 34px; height: 34px; }.journey-identity h2 { font-size: 16px; }.journey-instruction { margin-top: 7px; padding-top: 6px; }.navigation-controls { display: flex; flex-wrap: wrap; justify-content: center; gap: 2px; margin-top: 6px; }.navigation-controls ion-button { font-size: 11px; min-height: 34px; text-transform: none; }.evidence-note { margin: 4px 0; font-size: 10px; color: #526b82; }.simulation-notice { position: relative; z-index: 5; padding: 8px; background: #fff2c9; color: #724500; text-align: center; font-weight: 700; font-size: 12px; }.route-complete p { font-size: 12px; }
 </style>
 
 <style scoped>
 .map-guidance { position: relative; height: 100%; }
+.map-guidance.navigation-layout { display:flex;flex-direction:column;overflow-y:auto; }
+.map-guidance.navigation-layout > .map-preview { position:relative;inset:auto;flex:1 0 46dvh;min-height:280px;height:auto;padding:0; }
+.map-guidance.navigation-layout > .guidance-sheet { position:relative;inset:auto;max-height:none;flex:0 0 auto; }
+.navigation-layout .camera-frame { padding-top:14px; }
+.navigation-layout .guidance-sheet { border-radius:20px 20px 0 0;max-height:46%;padding:14px 14px max(12px,env(safe-area-inset-bottom));background:#f8fbfffa;box-shadow:0 -4px 20px #102e5218; }
+.navigation-layout .guidance-sheet::before { display:none; }
+.navigation-layout .journey-card { display:grid;gap:8px; }
+.navigation-layout .journey-identity { gap:8px; }
+.navigation-layout .journey-identity h2 { font-size:16px;margin:0; }
+.navigation-layout .journey-identity p { margin:2px 0;font-size:11px; }
+.navigation-layout .dest-kicker { font-size:9px; }
+.navigation-layout .journey-instruction { margin:0;padding:8px 10px;border:0;border-radius:10px;background:#e9f2fc;gap:8px; }
+.navigation-layout .journey-instruction strong { font-size:13px;line-height:1.4; }
+.navigation-layout .journey-instruction ion-icon { font-size:18px;flex-shrink:0; }
+.navigation-controls { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:10px 0 0; }
+.navigation-controls.outdoor-actions { grid-template-columns:repeat(4,minmax(0,1fr)); }
+.navigation-controls ion-button { margin:0;min-width:0;min-height:44px;height:auto;font-size:11px;letter-spacing:0;text-transform:none;--border-radius:10px;--padding-start:5px;--padding-end:5px;--border-color:#c4d5e9;--color:#215b94; }
+.navigation-controls ion-button[fill=solid] { --background:#2161db;--color:white; }
+.navigation-controls .stop-action { --color:#a63842;--border-color:#e6cdd1; }
+.route-details { margin-top:10px;border-top:1px solid #dce6f0;padding-top:8px;color:#60758a;font-size:11px; }
+.route-details summary { cursor:pointer;min-height:28px;line-height:28px; }
+.route-details summary span { float:right;background:#edf2f8;color:#36546c;border-radius:6px;padding:0 7px;font-size:10px;line-height:24px; }
+.route-details p { font-size:11px;line-height:1.5;margin:6px 0; }
+@media(max-width:340px) { .navigation-controls.outdoor-actions { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media(max-height:560px) { .navigation-layout .guidance-sheet { max-height:55%; } }
 .map-guidance:not(.navigation-layout) { display: flex; flex-direction: column; overflow-y: auto; }
 .map-guidance:not(.navigation-layout) > .map-preview { position: relative; inset: auto; flex: 0 0 42dvh; min-height: 260px; padding-bottom: 0; }
 .map-guidance:not(.navigation-layout) > .sheet { position: relative; z-index: 2; background: #f4f9ff; }
