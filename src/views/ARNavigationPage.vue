@@ -43,7 +43,7 @@
     <ion-content v-else class="nav-content" :scroll-y="showMapWait">
       <main :class="{ 'navigation-layout': !showMapWait, 'map-guidance': mapVisible }">
       <div v-if="simulationUsed" class="simulation-notice" role="status">TEST SESSION - progress is not a real journey.</div>
-      <DestinationMapPreview v-if="mapVisible && destination" :entrance="destination.outdoorTarget" fullscreen external :live-location="outdoor.location" :live-route="outdoorRouting.route.value" />
+      <DestinationMapPreview v-if="mapVisible && destination" :entrance="destination.outdoorTarget" fullscreen external :live-location="outdoor.location" :raw-location="outdoor.raw" :live-route="outdoorRouting.route.value" />
       <div v-if="showMapWait" class="sheet">
         <div class="map-card" aria-hidden="true">
           <span class="map-pin"><ion-icon :icon="location" /></span>
@@ -1613,11 +1613,15 @@ ion-alert.arrival-alert .alert-button-group .alert-button .alert-button-inner { 
 .navigation-layout .camera-frame { position: absolute; inset: 0; min-height: 0; margin: 0; height: 100%; }
 .navigation-layout > .sheet:first-of-type { z-index: 2; position: relative; margin: 8px 12px; border-radius: 16px; background: #f5faffeb; }
 .navigation-layout .guidance-sheet { position: absolute; z-index: 3; bottom: 0; left: 0; right: 0; max-height: 43%; overflow-y: auto; padding: 12px 16px max(10px, env(safe-area-inset-bottom)); }
-.navigation-layout .journey-card { padding: 0; }.journey-pin { width: 34px; height: 34px; }.journey-identity h2 { font-size: 16px; }.journey-instruction { margin-top: 7px; padding-top: 6px; }.navigation-controls { display: flex; flex-wrap: wrap; justify-content: center; gap: 2px; margin-top: 6px; }.navigation-controls ion-button { font-size: 11px; min-height: 34px; text-transform: none; }.evidence-note { margin: 4px 0; font-size: 10px; color: #526b82; }.simulation-notice { position: relative; z-index: 5; padding: 8px; background: #fff2c9; color: #724500; text-align: center; font-weight: 700; font-size: 12px; }.map-guidance > .map-preview { position: absolute; inset: 0; padding-bottom: 210px; }.route-complete p { font-size: 12px; }
+.navigation-layout .journey-card { padding: 0; }.journey-pin { width: 34px; height: 34px; }.journey-identity h2 { font-size: 16px; }.journey-instruction { margin-top: 7px; padding-top: 6px; }.navigation-controls { display: flex; flex-wrap: wrap; justify-content: center; gap: 2px; margin-top: 6px; }.navigation-controls ion-button { font-size: 11px; min-height: 34px; text-transform: none; }.evidence-note { margin: 4px 0; font-size: 10px; color: #526b82; }.simulation-notice { position: relative; z-index: 5; padding: 8px; background: #fff2c9; color: #724500; text-align: center; font-weight: 700; font-size: 12px; }.route-complete p { font-size: 12px; }
 </style>
 
 <style scoped>
 .map-guidance { position: relative; height: 100%; }
+.map-guidance.navigation-layout { display:flex;flex-direction:column;overflow-y:auto; }
+.map-guidance.navigation-layout > .map-preview { position:relative;inset:auto;flex:1 0 48dvh;min-height:300px;height:auto;padding:0; }
+.map-guidance.navigation-layout > .sheet { position:relative;inset:auto;flex:0 0 auto;max-height:none;margin:0;padding:12px 16px max(10px,env(safe-area-inset-bottom)); }
+.map-guidance.navigation-layout > .guidance-sheet { position:relative;bottom:auto;max-height:none;overflow:visible; }
 .map-guidance:not(.navigation-layout) { display: flex; flex-direction: column; overflow-y: auto; }
 .map-guidance:not(.navigation-layout) > .map-preview { position: relative; inset: auto; flex: 0 0 42dvh; min-height: 260px; padding-bottom: 0; }
 .map-guidance:not(.navigation-layout) > .sheet { position: relative; z-index: 2; background: #f4f9ff; }

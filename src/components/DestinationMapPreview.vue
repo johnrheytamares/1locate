@@ -1,14 +1,16 @@
 <template>
-  <section class="map-preview" :class="{ fullscreen }" aria-label="Satellite destination preview">
+  <section class="map-preview" :class="{ fullscreen, embedded: external }" aria-label="Satellite destination preview">
     <div class="map-heading"><strong>{{ showSchoolMap && schoolMap ? 'School campus map' : 'Destination preview' }}</strong><button :disabled="!mapReady && !(showSchoolMap && schoolMap)" @click="recenter">Recenter</button></div>
-    <div v-if="showSchoolMap && schoolMap" ref="schoolContainer" class="school-map-canvas"><div class="school-map-frame" :style="{ width: `${schoolZoom * 100}%` }"><CampusMapCanvas :map="schoolMap" :route="walkingRoute?.source === 'campus' ? walkingRoute.coordinates : undefined" :nodes="schoolNodes" :user="schoolMapVerified ? fix : null" /></div></div>
+    <div v-if="showSchoolMap && schoolMap" ref="schoolContainer" class="school-map-canvas"><div class="school-map-frame" :style="{ width: `${schoolZoom * 100}%` }"><CampusMapCanvas :map="schoolMap" :route="walkingRoute?.source === 'campus' ? walkingRoute.coordinates : undefined" :nodes="schoolNodes" :user="schoolMapVerified && !fixStale ? fix : null" /></div></div>
     <div v-show="!showSchoolMap || !schoolMap" ref="container" class="map-canvas" aria-label="Satellite map with your location and building entrance" />
     <div class="map-status">
     <p v-if="!(showSchoolMap && schoolMap)" class="legend"><span class="user-dot">●</span> Your location <span class="entrance-dot">●</span> Building entrance</p>
     <p v-if="mapMessage && !(showSchoolMap && schoolMap)" role="status">{{ mapMessage }}</p>
     <p role="status">{{ locationMessage }}</p>
     <p v-if="!target">Entrance coordinates are not set. Ask the campus administrator to verify this entrance.</p>
-    <p v-if="fix">GPS accuracy: ±{{ Math.round(fix.accuracy) }} m. The pin is an estimate.</p>
+    <p v-if="rawFix">Latest GPS accuracy: ±{{ Math.round(rawFix.accuracy) }} m.</p>
+    <p v-if="fixStale" role="status">Last reliable location is stale. Waiting for fresh GPS; location pin is hidden.</p>
+    <p v-if="fix">Last accepted GPS accuracy: ±{{ Math.round(fix.accuracy) }} m. The pin is an estimate.</p>
     <div class="map-actions"><template v-if="showSchoolMap && schoolMap"><button :disabled="schoolZoom >= 4" @click="schoolZoom = Math.min(4, schoolZoom + 0.5)">Zoom +</button><button :disabled="schoolZoom <= 1" @click="schoolZoom = Math.max(1, schoolZoom - 0.5)">Zoom -</button></template><button v-if="schoolMap" @click="showSchoolMap = !showSchoolMap">{{ showSchoolMap ? 'Satellite view' : 'School map' }}</button><button v-if="mapMessage" @click="retryMap">Retry map</button><button v-if="!external" @click="locate">Update my location</button></div>
     <p v-if="showSchoolMap && schoolMap && (!schoolMapVerified || walkingRoute?.source !== 'campus')" role="status">School reference image only. Switch to Satellite view for GPS and any available walking route.</p>
     <p v-else-if="fullscreen" role="status">{{ routeMessage }}</p>
@@ -29,7 +31,7 @@ import { App } from '@capacitor/app';
 import type { PluginListenerHandle } from '@capacitor/core';
 import type { Map as MapInstance, Marker, GeoJSONSource } from 'maplibre-gl';
 import type { OutdoorTarget } from '@/models/navigation';
-import type { UserLocation } from '@/models/location';
+import { MAX_ACCEPTED_GPS_ACCURACY, type UserLocation } from '@/models/location';
 import { checkPermission, requestPermission, toLocationError, toUserLocation } from '@/services/location.service';
 import { calculateDistance, destinationPoint } from '@/services/geo.service';
 import { fetchOutdoorRoute, type OutdoorWalkingRoute } from '@/services/outdoor-route.service';
@@ -37,8 +39,8 @@ import type { WalkingRoute } from '@/services/walking-route.service';
 import { surveyedTarget } from '@/services/outdoor-navigation.service';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
-const props = defineProps<{ entrance: OutdoorTarget; fullscreen?: boolean; external?: boolean; liveLocation?: UserLocation | null; liveRoute?: OutdoorWalkingRoute | null }>();
-const emit = defineEmits<{ location: [value: UserLocation]; route: [value: WalkingRoute | null] }>();
+const props = defineProps<{ entrance: OutdoorTarget; fullscreen?: boolean; external?: boolean; liveLocation?: UserLocation | null; rawLocation?: UserLocation | null; liveRoute?: OutdoorWalkingRoute | null }>();
+const emit = defineEmits<{ location: [value: UserLocation | null]; route: [value: WalkingRoute | null] }>();
 const showSchoolMap = ref(true);
 const schoolZoom = ref(1);
 const referenceMap = ref<CampusMap | null>(null);
@@ -66,7 +68,7 @@ function renderRoute() {
 }
 
 async function updateRoute() {
-  if (props.external || !props.fullscreen || !target.value || !fix.value) return;
+  if (props.external || !props.fullscreen || !target.value || !fix.value || fixStale.value) return;
   if (fix.value.accuracy > 20) { routeMessage.value = 'Waiting for more accurate GPS to plan a walking route.'; return; }
   const now = Date.now();
   if (lastRouteAt && now - lastRouteAt < 15000) return;
@@ -91,6 +93,23 @@ async function updateRoute() {
 const target = computed(() => surveyedTarget(props.entrance));
 const container = ref<HTMLDivElement>();
 const fix = ref<UserLocation | null>(null);
+const rawFix = ref<UserLocation | null>(null);
+const now = ref(Date.now());
+const fixStale = computed(() => !!fix.value && (now.value-fix.value.timestamp > 15000 || fix.value.timestamp > now.value+5000));
+let freshnessClock: ReturnType<typeof setInterval> | undefined;
+function acceptLocation(next: UserLocation | null) {
+  now.value=Date.now();
+  rawFix.value=next;
+  if (!next) { locationMessage.value='Waiting for GPS.'; return false; }
+  if (!Number.isFinite(next.accuracy) || next.accuracy<0 || next.accuracy>MAX_ACCEPTED_GPS_ACCURACY) {
+    locationMessage.value=`GPS accuracy is ±${Math.round(next.accuracy)} m. Waiting for a better location fix. Move to an open area and enable Precise Location.`;
+    return false;
+  }
+  if (!Number.isFinite(next.timestamp) || now.value-next.timestamp>15000 || next.timestamp>now.value+5000) {
+    locationMessage.value='GPS reading is stale. Waiting for a fresh location fix.';return false;
+  }
+  fix.value=next;return true;
+}
 const mapReady = ref(false);
 const mapMessage = ref('');
 const locationMessage = ref('Getting your location…');
@@ -125,6 +144,11 @@ function recenter() {
 
 function renderLocation() {
   if (!map || !library || !fix.value) return;
+  if (fixStale.value) {
+    userMarker?.remove(); userMarker=undefined;
+    const source=map.getSource('gps-accuracy') as GeoJSONSource | undefined;
+    source?.setData({type:'FeatureCollection',features:[]});return;
+  }
   const position: [number, number] = [fix.value.longitude, fix.value.latitude];
   if (!userMarker) {
     userMarker = new library.Marker({ color: '#2563eb' })
@@ -172,8 +196,11 @@ async function locate() {
       if (disposed || session !== generation) return;
       if (error) { locationMessage.value = toLocationError(error).message; return; }
       const next = toUserLocation(position);
-      if (!next || Date.now() - next.timestamp > 30000) return;
-      fix.value = next;
+      if (!acceptLocation(next) || !next) {
+        routeAbort?.abort();
+        walkingRoute.value=null;emit('route',null);emit('location',null);renderRoute();
+        return;
+      }
       emit('location', next);
       locationMessage.value = permission.precise ? 'Your location is updating.' : 'Approximate location only. Enable precise location for a better pin.';
       renderLocation();
@@ -221,7 +248,8 @@ async function retryMap() {
 
 watch(() => props.liveLocation, location => {
   if (!props.external) return;
-  fix.value = location ?? null;
+  if (!location) { fix.value=null;userMarker?.remove();userMarker=undefined; }
+  if (!acceptLocation(location ?? null)) return;
   locationMessage.value = location ? 'Location shared with camera guidance.' : 'Waiting for GPS.';
   renderLocation();
 }, { immediate: true });
@@ -232,6 +260,14 @@ watch(() => props.liveRoute, route => {
   renderRoute();
 }, { immediate: true });
 
+watch(() => props.rawLocation, location => {
+  if (props.external && location) acceptRawWarning(location);
+}, { immediate: true });
+function acceptRawWarning(location:UserLocation) {
+  rawFix.value=location;
+  if(location.accuracy>MAX_ACCEPTED_GPS_ACCURACY){locationMessage.value=`GPS accuracy is ±${Math.round(location.accuracy)} m. Waiting for a better location fix. Move to an open area and enable Precise Location.`;return false;}
+  return true;
+}
 let referenceAbort: AbortController | undefined;
 async function loadReferenceMap() {
   const controller = new AbortController(); referenceAbort = controller;
@@ -242,7 +278,9 @@ async function loadReferenceMap() {
   } catch { /* Reference image is optional; route errors are reported by the route session. */ }
   finally { clearTimeout(timeout); }
 }
+watch(fixStale, stale => { if(stale){renderLocation();routeAbort?.abort();if(!props.external){emit('location',null);walkingRoute.value=null;emit('route',null);renderRoute();}} });
 onMounted(() => {
+  freshnessClock=setInterval(()=>{now.value=Date.now();},1000);
   void loadReferenceMap();
   void retryMap(); if (!props.external) void locate();
   resize = new ResizeObserver(() => map?.resize());
@@ -252,7 +290,7 @@ onMounted(() => {
     else { void stopLocation(); locationMessage.value = 'Location paused while app is in the background.'; }
   }).then(handle => { if (disposed) void handle.remove(); else appHandle = handle; });
 });
-onBeforeUnmount(() => { referenceAbort?.abort(); disposed = true; void stopLocation(); void appHandle?.remove(); resize?.disconnect(); map?.remove(); });
+onBeforeUnmount(() => { clearInterval(freshnessClock);referenceAbort?.abort(); disposed = true; void stopLocation(); void appHandle?.remove(); resize?.disconnect(); map?.remove(); });
 defineExpose({ stopLocation });
 </script>
 
@@ -282,4 +320,8 @@ p { margin: 8px 12px; font-size: 12px; line-height: 1.4; }
 .fullscreen .map-note { display: none; }
 .fullscreen .map-heading { padding: 6px 12px; }
 .fullscreen .map-actions { padding: 3px 12px; }
+.fullscreen.embedded { min-height:0; overflow:hidden; }
+.fullscreen.embedded .map-status { position:relative;left:auto;right:auto;bottom:auto;flex:0 0 auto;max-height:38%;overflow-y:auto;border-radius:0; }
+.fullscreen.embedded .map-heading { position:relative;top:auto;left:auto;right:auto;flex:0 0 auto; }
+.fullscreen.embedded .map-canvas,.fullscreen.embedded .school-map-canvas { min-height:120px; }
 </style>
