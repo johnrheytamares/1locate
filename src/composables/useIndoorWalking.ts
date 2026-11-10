@@ -1,4 +1,6 @@
 import { reactive, ref } from 'vue';
+import { Capacitor } from '@capacitor/core';
+import { IndoorStepSource } from '@/services/indoor-steps';
 
 /** Shared starting estimate; personal measurements can override it. */
 export const DEFAULT_STEP_LENGTH_METERS = 0.7;
@@ -127,6 +129,7 @@ export function useIndoorWalking(
   const message = ref('Automatic walking is ready. Default step length is 0.70 m; personal calibration is optional.');
   let stepLengthSource: WalkingDiagnostics['stepLengthSource'] = 'default';
   let detector = new WalkingPeaks();
+  const nativeSource = new IndoorStepSource();
   let generation = 0;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let gravity: Vector | null = null;
@@ -251,6 +254,7 @@ export function useIndoorWalking(
     message.value = 'Automatic walking stopped. Enable it again to continue.';
     clearTimeout(timer);
     window.removeEventListener('devicemotion', motion);
+    void nativeSource.stop();
     detector = new WalkingPeaks();
     gravity = null;
     rateStart = 0;
@@ -258,6 +262,34 @@ export function useIndoorWalking(
   }
   async function start() {
     stop();
+    if (Capacitor.isNativePlatform()) {
+      const request = generation;
+      try {
+        enabled.value = true;
+        message.value = 'Starting Android step sensor…';
+        const method = await nativeSource.start(
+          (steps, method) => {
+            if (request !== generation || !enabled.value) return;
+            const blocked = walkBlock() ?? (document.hidden ? 'app hidden' : null);
+            if (blocked) { note(`blocked: ${blocked}`); return; }
+            if (diagnostics) {
+              diagnostics.acceptedSteps += steps;
+              diagnostics.lastReason = `native ${method}: ${steps} step(s) accepted`;
+            }
+            onStep(steps * stepLength.value);
+          },
+          status => { if (request === generation) message.value = status; },
+        );
+        if (request !== generation) return;
+        message.value = `${method} active. Walking distance is estimated from actual sensor steps.`;
+        return;
+      } catch (error) {
+        if (request !== generation) return;
+        enabled.value = false;
+        message.value = error instanceof Error ? error.message : 'Android step sensor unavailable.';
+        return;
+      }
+    }
     if (typeof DeviceMotionEvent === 'undefined') { message.value = 'Motion sensors unavailable. Use manual controls.'; return; }
     const request = generation;
     try {

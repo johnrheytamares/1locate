@@ -37,7 +37,7 @@ function dispatchMotion(fields: MotionFields) {
 const sample = (x: number) => dispatchMotion({ acceleration: { x, y: 0, z: 0 } });
 /** A 100 ms pulse followed by a 400 ms pause: a 500 ms stride. */
 const stride = (send: (x: number) => void = sample) => {
-  send(0); send(2); vi.advanceTimersByTime(100); send(0); vi.advanceTimersByTime(400);
+  send(0); vi.advanceTimersByTime(20);send(2); vi.advanceTimersByTime(80); send(0); vi.advanceTimersByTime(400);
 };
 
 describe('walking distance', () => {
@@ -74,7 +74,7 @@ describe('walking distance', () => {
     expect(pulse(detector, 3000).steps).toBe(0);
     expect(pulse(detector, 3500).steps).toBe(STREAK_TO_CONFIRM);
     expect(pulse(detector, 4000).steps).toBe(1);
-    expect(pulse(detector, 6000)).toEqual({ steps: 0, candidate: true, reason: 'step gap 2000 ms (needs 350–1100 ms)' });
+    expect(pulse(detector, 6000)).toEqual({ steps: 0, candidate: true, reason: 'step gap 2000 ms (needs 350–1600 ms)' });
     const shaking = new WalkingPeaks();
     for (let time = 0; time < 2000; time += 180) expect(pulse(shaking, time).steps).toBe(0);
     expect(shaking.sample(NaN, 3000)).toEqual({ steps: 0, candidate: false, reason: 'invalid motion sample' });

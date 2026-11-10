@@ -11,3 +11,13 @@ test('motion fallback rejects stationary jitter and credits a complete confirmed
 test('compatible straight sections merge, but turns, floors, doors and administrator checkpoints remain boundaries',()=>{expect(mergeStraightInstructions([walk(1),walk(2),walk(1),walk(1),walk(1,{direction:'right'})]).map(s=>s.distance)).toEqual([5,1]);expect(mergeStraightInstructions([walk(1),walk(2,{checkpoint:true}),walk(1)])).toHaveLength(3);expect(mergeStraightInstructions([walk(1),upstairs,arrivedFloor,walk(1)])).toHaveLength(4);expect(mergeStraightInstructions([walk(1,{floorId:'a'}),walk(1,{floorId:'b'})])).toHaveLength(2);expect(mergeStraightInstructions([walk(499),walk(2)])).toHaveLength(2);});
 test('explicit floor changes are zero-meter checkpoints that need matching floor confirmation',()=>{const value=journey([walk(10),upstairs,arrivedFloor,walk(3,{direction:'right'}),arrival]);expect(parseIndoorJourney(value).instructions.filter(s=>s.kind==='walk').reduce((n,s)=>n+s.distance,0)).toBe(13);expect(()=>parseIndoorJourney(journey([walk(10),{...upstairs,distance:1},arrivedFloor,arrival]))).toThrow('never meters');expect(()=>parseIndoorJourney(journey([walk(10),upstairs,walk(3),arrival]))).toThrow('Confirm');expect(()=>parseIndoorJourney(journey([walk(10),upstairs,{...arrivedFloor,floorId:'other'},arrival]))).toThrow('match');expect(()=>parseIndoorJourney(journey([walk(10),upstairs,arrivedFloor]))).toThrow('arrival checkpoint');});
 test('the destination floor must match the final confirmed floor even with no walking after the stairs',()=>{expect(()=>parseIndoorJourney({...journey([upstairs,arrivedFloor,arrival]),floorId:'f3'})).toThrow('destination room floor');});
+
+
+test('synthetic slow cadence, duplicate samples and pause resets do not invent extra events',async()=>{
+ const {WalkingPulseDetector,LinearAccelerationFilter}=await import('../../shared/indoor-tracking');
+ const d=new WalkingPulseDetector();let total=0;
+ for(let i=0;i<5;i++){const t=i*1400;d.sample(0,t);d.sample(2,t+20);const pulse=d.sample(0,t+120);total+=pulse.steps;expect(d.sample(0,t+120).steps).toBe(0);}
+ expect(total).toBe(5);d.reset();expect(d.sample(0,9000).steps).toBe(0);
+ const gravity=new LinearAccelerationFilter();for(let i=0;i<750;i++)expect(gravity.sample([0,0,9.81],i*20)).toEqual([0,0,0]);
+ expect(()=>parseStrideProfile({...calibrateStride(7,10,'motion-estimate'),stride:NaN})).toThrow();
+});

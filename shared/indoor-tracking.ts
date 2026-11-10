@@ -9,7 +9,7 @@ export function parseStrideProfile(value: unknown): StrideProfile {
   const p = value as StrideProfile;
   if (!p || p.version !== 1 || !Number.isFinite(Date.parse(p.calibratedAt))) throw new Error('Invalid calibration profile.');
   const checked = calibrateStride(p.distance,p.steps,p.method,p.calibratedAt);
-  if (Math.abs(checked.stride-p.stride)>1e-6) throw new Error('Invalid calibrated stride.');
+  if (!Number.isFinite(p.stride) || Math.abs(checked.stride-p.stride)>1e-6) throw new Error('Invalid calibrated stride.');
   return checked;
 }
 export class StepCounterBaseline {
@@ -21,21 +21,102 @@ export class StepCounterBaseline {
     const delta = Math.floor(total-this.previous); this.previous=total; return delta;
   }
 }
-/** Complete pulses and sustained cadence; credit the first confirmed streak as a batch. */
-export class MotionStepDetector {
-  private low=false; private pulse:number|null=null; private last=-Infinity; private interval:number|null=null; private streak=0;
-  sample(magnitude:number,time:number):number {
-    if(!Number.isFinite(magnitude)||!Number.isFinite(time))return 0;
-    if(magnitude>8){this.reset();return 0;}
-    if(magnitude>=1.4&&this.low&&this.pulse==null){this.pulse=time;this.low=false;}
-    if(magnitude>=0.7)return 0;this.low=true;if(this.pulse==null)return 0;
-    const duration=time-this.pulse;this.pulse=null;if(duration<60||duration>350){this.reset();return 0;}
-    const gap=time-this.last;
-    if(gap<350||gap>1100||(this.interval!=null&&Math.abs(gap-this.interval)>this.interval*0.35)){this.streak=1;this.interval=null;}
-    else{this.streak++;this.interval=this.interval==null?gap:this.interval*0.7+gap*0.3;}
-    this.last=time;return this.streak===4?4:this.streak>4?1:0;
+export const STREAK_TO_CONFIRM=4;
+export function stepMethodLabel(method:IndoorMeasurement|null):string {
+ return method==='hardware-detector'?'Hardware Step Detector':method==='hardware-counter'?'Hardware Step Counter':method==='motion-estimate'?'Motion Estimate':'Sensor Unavailable';
+}
+export interface StepSample {
+  /** Steps to credit now: all confirmed strides of a new streak, then one per stride. */
+  steps: number;
+  /** A complete acceleration pulse was seen on this sample. */
+  candidate: boolean;
+  /** Why the pulse did not count yet, or null. */
+  reason: string | null;
+}
+
+const QUIET: StepSample = Object.freeze({ steps: 0, candidate: false, reason: null });
+
+/** Conservative walking heuristic: complete pulses plus four consistent strides.
+ * Pulses that do not form that rhythm never count, so a brief phone adjustment cannot add distance.
+ * Repeated rhythmic shaking can still resemble walking without an independent position source.
+ */
+export class WalkingPulseDetector {
+  private low = false;
+  private pulseStart: number | null = null;
+  private last = -Infinity;
+  private interval: number | null = null;
+  private streak = 0;
+  private sampleAt = -Infinity;
+  sample(magnitude: number, time: number): StepSample {
+    if (!Number.isFinite(magnitude) || !Number.isFinite(time)) return { steps: 0, candidate: false, reason: 'invalid motion sample' };
+    if(time<=this.sampleAt)return QUIET;
+    this.sampleAt=time;
+    if (magnitude > 8) {
+      this.reset();
+      return { steps: 0, candidate: false, reason: 'jolt over 8 m/s²' };
+    }
+    if (magnitude >= 1.4 && this.low && this.pulseStart == null) {
+      this.pulseStart = time;
+      this.low = false;
+    }
+    if (magnitude >= 0.7) return QUIET;
+    this.low = true;
+    if (this.pulseStart == null) return QUIET;
+    const duration = time - this.pulseStart;
+    this.pulseStart = null;
+    if (duration < 60 || duration > 350) {
+      this.reset();
+      return { steps: 0, candidate: true, reason: `pulse lasted ${Math.round(duration)} ms (needs 60–350 ms)` };
+    }
+    const gap = time - this.last;
+    let reason: string | null = null;
+    if (!Number.isFinite(gap)) {
+      this.restartStreak();
+    } else if (gap < 350 || gap > 1600) {
+      reason = `step gap ${Math.round(gap)} ms (needs 350–1600 ms)`;
+      this.restartStreak();
+    } else if (this.interval != null && Math.abs(gap - this.interval) > this.interval * 0.35) {
+      reason = `irregular rhythm (${Math.round(gap)} ms vs ${Math.round(this.interval)} ms)`;
+      this.restartStreak();
+    } else {
+      this.streak += 1;
+      this.interval = this.interval == null ? gap : this.interval * 0.7 + gap * 0.3;
+    }
+    this.last = time;
+    if (this.streak === STREAK_TO_CONFIRM) return { steps: STREAK_TO_CONFIRM, candidate: true, reason: null };
+    if (this.streak > STREAK_TO_CONFIRM) return { steps: 1, candidate: true, reason: null };
+    return { steps: 0, candidate: true, reason: reason ?? `confirming rhythm (${this.streak}/${STREAK_TO_CONFIRM})` };
   }
-  reset(){this.low=false;this.pulse=null;this.last=-Infinity;this.interval=null;this.streak=0;}
+  private restartStreak() {
+    this.streak = 1;
+    this.interval = null;
+  }
+  reset() {
+    this.low = false;
+    this.pulseStart = null;
+    this.last = -Infinity;
+    this.interval = null;
+    this.streak = 0;
+    this.sampleAt = -Infinity;
+  }
+}
+
+export class MotionStepDetector {
+ private detector=new WalkingPulseDetector();
+ sample(magnitude:number,time:number){return this.detector.sample(magnitude,time).steps;}
+ reset(){this.detector.reset();}
+}
+/** Time-based gravity filter, initialized from the first actual sample (no startup gravity spike). */
+export class LinearAccelerationFilter {
+ private gravity:number[]|null=null;private time=0;
+ sample(values:number[],time:number):number[]|null {
+  if(values.length!==3||!values.every(Number.isFinite)||!Number.isFinite(time))return null;
+  if(!this.gravity){this.gravity=[...values];this.time=time;return [0,0,0];}
+  const dt=time-this.time;if(dt<=0)return null;
+  const k=dt/(500+dt);this.time=time;
+  this.gravity=this.gravity.map((g,i)=>g+k*(values[i]-g));
+  return values.map((v,i)=>v-this.gravity![i]);
+ }
 }
 export type FloorAction = 'upstairs'|'downstairs'|'elevator'|'arrive-floor'|'arrived';
 export interface IndoorInstruction { kind:'walk'|FloorAction; direction:'straight'|'left'|'right'; distance:number; checkpoint?:boolean; floorId?:string; floorName?:string; level?:number; method?:IndoorMeasurement; calibration?:StrideProfile; recordedAt?:string }

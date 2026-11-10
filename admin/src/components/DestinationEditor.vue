@@ -194,7 +194,7 @@ async function enableSteps(request:number){
     if(request!==generation){await stepSource.stop();return;}
     const saved=profile.value?.method===method?profile.value:readCalibration(session.state.userId||'local',method);
     if(!saved){manual.value=true;sensorsAvailable.value=false;await stepSource.stop();sensorStatus.value='Calibration required for automatic distance.';status.value='No usable motion samples or calibration profile yet. Calibrate on this phone, or use measured manual distances.';return;}
-    profile.value=saved;stride.value=saved.stride;sensorsAvailable.value=true;sensorStatus.value=`${method} · ${saved.stride.toFixed(2)} m per step`;status.value='Automatic tracking active. Walk normally and mark each turn.';
+    profile.value=saved;stride.value=saved.stride;sensorsAvailable.value=true;status.value='Automatic tracking active. Walk normally and mark each turn.';
   }catch(err){if(request!==generation)return;await stepSource.stop();manual.value=true;sensorsAvailable.value=false;sensorStatus.value='Automatic step tracking unavailable.';status.value=err instanceof Error?err.message:describeError(err);}
 }
 function stopCamera() {

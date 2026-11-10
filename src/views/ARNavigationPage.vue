@@ -43,7 +43,7 @@
     <ion-content v-else class="nav-content" :scroll-y="showMapWait">
       <main :class="{ 'navigation-layout': !showMapWait, 'map-guidance': mapVisible }">
       <div v-if="simulationUsed" class="simulation-notice" role="status">TEST SESSION - progress is not a real journey.</div>
-      <DestinationMapPreview v-if="mapVisible && destination" :entrance="destination.outdoorTarget" fullscreen external :live-location="outdoor.location" :raw-location="outdoor.raw" :live-route="outdoorRouting.route.value" />
+      <DestinationMapPreview v-if="mapVisible && destination" :entrance="destination.outdoorTarget" fullscreen external :live-location="outdoor.location" :live-route="outdoorRouting.route.value" />
       <div v-if="showMapWait" class="sheet">
         <div class="map-card" aria-hidden="true">
           <span class="map-pin"><ion-icon :icon="location" /></span>
@@ -93,8 +93,8 @@
         <div v-if="!mapVisible" class="camera-frame">
           <span class="corner tl" /><span class="corner tr" /><span class="corner bl" /><span class="corner br" />
           <NavigationOverlay
-            :arrows="arrows"
-            :destination-name="markerName"
+            :arrows="isOutdoor ? arrows : []"
+            :destination-name="isOutdoor ? markerName : 'Route guide · not live room position'"
             :distance-label="distanceLabel"
             :instruction="''"
             :heading-offset="pathOffset"
@@ -136,24 +136,13 @@
           <ion-button size="small" fill="outline" data-test="map-view" @click="toggleMap">{{ mapVisible ? 'Camera View' : 'Map View' }}</ion-button>
           <ion-button size="small" fill="outline" data-test="stop-navigation" @click="chooseAnotherDestination">Stop</ion-button>
           <ion-button v-if="stage === 'indoor' && !navigation.paused && !arrived" size="small" fill="outline" @click="showCheckpoint = true">Confirm checkpoint</ion-button>
-            <ion-button
-              v-if="
-                stage === 'indoor' &&
-                !navigation.paused &&
-                !arrived &&
-                needsTurn(navigation)
-              "
-              size="small"
-              color="primary"
-              @click="confirmTurn">
-              I completed the turn
-            </ion-button>
+          <ion-button v-if="stage === 'indoor' && !navigation.paused && !arrived && needsTurn(navigation)" size="small" color="primary" @click="confirmTurn">I completed the turn</ion-button>
         </div>
         <p v-if="isOutdoor" class="evidence-note" role="status">{{ outdoorRouting.message.value }} {{ outdoorRouting.route.value?.source === 'campus' ? 'Campus walking network.' : outdoorRouting.route.value ? 'OpenStreetMap route; check access on site.' : '' }} Camera arrows are direction overlays, not ground-anchored AR.</p>
         <ion-button v-if="isOutdoor" size="small" fill="outline" :disabled="outdoorRouting.status.value === 'loading'" @click="outdoorRouting.retry">Retry walking route</ion-button>
         <ion-button v-if="isOutdoor && !showMapWait" size="small" fill="outline" data-test="at-entrance" @click="onAtEntrance">I'm at the entrance</ion-button>
         <p v-if="mapVisible && stage === 'indoor'" class="evidence-note">Satellite GPS is an outdoor reference only. It does not track the floor or room.</p>
-        <p v-if="stage === 'indoor'" class="evidence-note">{{ manualProgress ? 'Progress includes user-confirmed checkpoints.' : 'Step-estimated route progress; not room positioning.' }}<template v-if="heading == null"> Heading unavailable. Follow the written route and confirm checkpoints.</template></p>
+        <p v-if="stage === 'indoor'" class="evidence-note">Indoor camera marker is informational only, not the physical room location. {{ manualProgress ? 'Progress includes user-confirmed checkpoints.' : 'Step-estimated route progress; not room positioning.' }}<template v-if="heading == null"> Heading unavailable. Follow the written route and confirm checkpoints.</template></p>
         <div v-if="stage === 'indoor' && arrived && !confirmingRestart" class="route-complete">
           <p>Estimated route complete. Check the room sign before confirming arrival.</p>
           <ion-button expand="block" @click="showArrival = true">Confirm destination</ion-button>
@@ -598,7 +587,7 @@ const instruction = computed(() => {
       const step = currentStep(navigation.value);
       return `Instruction ${stepIndex.value + 1}: ${step?.direction ?? 'straight'}, ${step?.distance ?? 0} m. Confirm the checkpoint when physically reached.`;
     }
-    if (!navigation.value.paused && navigation.value.forwardHeading == null) return 'Face the corridor to begin. Waiting for phone direction.';
+    if (!navigation.value.paused && navigation.value.forwardHeading == null) return navigationInstruction(navigation.value, heading.value);
     return navigationInstruction(navigation.value, heading.value);
   }
   if (locationPrompt.value) return locationPrompt.value.text;
@@ -693,7 +682,7 @@ watch([spokenGuidance, voiceSession], ([text]) => {
 
 watch(arrived, (isArrived, wasArrived) => {
   if (stage.value !== 'indoor') return;
-  if (isArrived && !wasArrived) { walking.stop(); clearAlignTimer(); showArrival.value = true; }
+  if (isArrived && !wasArrived) { walking.stop(); clearAlignTimer(); }
   if (!isArrived) showArrival.value = false;
 });
 
@@ -711,69 +700,25 @@ watch(
   },
 );
 
-function confirmTurn() {
-  if (
-    stage.value !== 'indoor' ||
-    navigation.value.paused ||
-    !needsTurn(navigation.value)
-  ) {
-    return;
-  }
-
-  clearAlignTimer();
-
-  navigation.value = completeCurrentTurn(
-    navigation.value
-  );
-}
-
 function clearAlignTimer() {
   if (alignTimer == null) return;
   window.clearTimeout(alignTimer);
   alignTimer = null;
 }
 
+function confirmTurn() {
+  if (stage.value !== 'indoor' || navigation.value.paused || !needsTurn(navigation.value)) return;
+  clearAlignTimer();
+  navigation.value = completeCurrentTurn(navigation.value);
+  manualProgress.value = true;
+}
+
 function syncTurnAlignment() {
-  const onTurn = stage.value === 'indoor'
-    && !navigation.value.paused
-    && needsTurn(navigation.value);
-  if (!onTurn) {
-    clearAlignTimer();
-    turnAlignment.value = currentDirection.value === 'straight' || arrived.value
-      ? 'not a turn'
-      : 'turn made; walk this step';
-    return;
-  }
-  if (heading.value == null || offset.value == null) {
-    clearAlignTimer();
-    turnAlignment.value = 'unavailable';
-    return;
-  }
-  if (Math.abs(offset.value) > FACING_TOLERANCE_DEGREES) {
-    clearAlignTimer();
-    turnAlignment.value = 'not aligned';
-    return;
-  }
-  turnAlignment.value = 'holding';
-  if (alignTimer != null) return;
-  const startedWalked = navigation.value.walkedMeters;
-  const startedForward = navigation.value.forwardHeading;
-  alignTimer = window.setTimeout(() => {
-    alignTimer = null;
-    const stillAligned = stage.value === 'indoor'
-      && !navigation.value.paused
-      && needsTurn(navigation.value)
-      && navigation.value.walkedMeters === startedWalked
-      && navigation.value.forwardHeading === startedForward
-      && offset.value != null
-      && Math.abs(offset.value) <= FACING_TOLERANCE_DEGREES;
-    if (!stillAligned) {
-      turnAlignment.value = 'not aligned';
-      return;
-    }
-    navigation.value = completeCurrentTurn(navigation.value);
-    turnAlignment.value = 'aligned';
-  }, TURN_ALIGNMENT_HOLD_MS);
+  // A compass change cannot verify that the student physically turned at an indoor junction.
+  clearAlignTimer();
+  turnAlignment.value = needsTurn(navigation.value)
+    ? 'confirm the turn at the real hallway junction'
+    : 'not a turn';
 }
 
 function setCameraChrome(active: boolean) {
@@ -1613,15 +1558,11 @@ ion-alert.arrival-alert .alert-button-group .alert-button .alert-button-inner { 
 .navigation-layout .camera-frame { position: absolute; inset: 0; min-height: 0; margin: 0; height: 100%; }
 .navigation-layout > .sheet:first-of-type { z-index: 2; position: relative; margin: 8px 12px; border-radius: 16px; background: #f5faffeb; }
 .navigation-layout .guidance-sheet { position: absolute; z-index: 3; bottom: 0; left: 0; right: 0; max-height: 43%; overflow-y: auto; padding: 12px 16px max(10px, env(safe-area-inset-bottom)); }
-.navigation-layout .journey-card { padding: 0; }.journey-pin { width: 34px; height: 34px; }.journey-identity h2 { font-size: 16px; }.journey-instruction { margin-top: 7px; padding-top: 6px; }.navigation-controls { display: flex; flex-wrap: wrap; justify-content: center; gap: 2px; margin-top: 6px; }.navigation-controls ion-button { font-size: 11px; min-height: 34px; text-transform: none; }.evidence-note { margin: 4px 0; font-size: 10px; color: #526b82; }.simulation-notice { position: relative; z-index: 5; padding: 8px; background: #fff2c9; color: #724500; text-align: center; font-weight: 700; font-size: 12px; }.route-complete p { font-size: 12px; }
+.navigation-layout .journey-card { padding: 0; }.journey-pin { width: 34px; height: 34px; }.journey-identity h2 { font-size: 16px; }.journey-instruction { margin-top: 7px; padding-top: 6px; }.navigation-controls { display: flex; flex-wrap: wrap; justify-content: center; gap: 2px; margin-top: 6px; }.navigation-controls ion-button { font-size: 11px; min-height: 34px; text-transform: none; }.evidence-note { margin: 4px 0; font-size: 10px; color: #526b82; }.simulation-notice { position: relative; z-index: 5; padding: 8px; background: #fff2c9; color: #724500; text-align: center; font-weight: 700; font-size: 12px; }.map-guidance > .map-preview { position: absolute; inset: 0; padding-bottom: 210px; }.route-complete p { font-size: 12px; }
 </style>
 
 <style scoped>
 .map-guidance { position: relative; height: 100%; }
-.map-guidance.navigation-layout { display:flex;flex-direction:column;overflow-y:auto; }
-.map-guidance.navigation-layout > .map-preview { position:relative;inset:auto;flex:1 0 48dvh;min-height:300px;height:auto;padding:0; }
-.map-guidance.navigation-layout > .sheet { position:relative;inset:auto;flex:0 0 auto;max-height:none;margin:0;padding:12px 16px max(10px,env(safe-area-inset-bottom)); }
-.map-guidance.navigation-layout > .guidance-sheet { position:relative;bottom:auto;max-height:none;overflow:visible; }
 .map-guidance:not(.navigation-layout) { display: flex; flex-direction: column; overflow-y: auto; }
 .map-guidance:not(.navigation-layout) > .map-preview { position: relative; inset: auto; flex: 0 0 42dvh; min-height: 260px; padding-bottom: 0; }
 .map-guidance:not(.navigation-layout) > .sheet { position: relative; z-index: 2; background: #f4f9ff; }

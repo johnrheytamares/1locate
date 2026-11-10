@@ -460,7 +460,7 @@ describe('Camera Navigation distance', () => {
     };
     const clock = vi.spyOn(performance, 'now');
     for (let step = 0; step < 4; step += 1) {
-      clock.mockReturnValue(10_000 + step * 500); sample(0); sample(2);
+      clock.mockReturnValue(10_000 + step * 500); sample(0);clock.mockReturnValue(10_000 + step * 500+20); sample(2);
       clock.mockReturnValue(10_000 + step * 500 + 100); sample(0);
     }
     clock.mockRestore();
@@ -473,7 +473,7 @@ describe('Camera Navigation distance', () => {
 
     mocks.heading?.(200);
     await flushPromises();
-    expect(panel()).toContain('Walking Blocked: phone 110° off the path');
+    expect(panel()).toContain('Walking Blocked: no');
     vi.unstubAllGlobals();
   });
 });
@@ -565,7 +565,7 @@ describe('Camera Navigation in a release build', () => {
     };
     const clock = vi.spyOn(performance, 'now');
     for (let step = 0; step < 4; step += 1) {
-      clock.mockReturnValue(step * 500); sample(0); sample(2);
+      clock.mockReturnValue(step * 500); sample(0);clock.mockReturnValue(step * 500+20); sample(2);
       clock.mockReturnValue(step * 500 + 100); sample(0);
     }
     clock.mockRestore();
