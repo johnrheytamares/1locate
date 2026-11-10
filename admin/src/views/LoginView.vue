@@ -1,15 +1,21 @@
 <template>
   <div class="center-page">
-    <form class="card narrow" novalidate data-test="login-form" @submit.prevent="onSubmit">
-      <img class="login-brand-logo" src="/images/1locate-logo.png" alt="1Locate logo" /><h1>1Locate Admin</h1>
-      <p class="muted">Sign in with the account an Admin created for you.</p>
+    <form class="card narrow auth-card" novalidate data-test="login-form" @submit.prevent="onSubmit">
+      <header class="auth-header">
+        <img class="login-brand-logo" src="/images/1locate-logo.png" alt="1Locate logo" />
+        <h1>1Locate Admin</h1>
+        <p class="muted">Sign in with the account an Admin created for you.</p>
+      </header>
       <p v-if="error" class="notice error" role="alert" data-test="login-error">{{ error }}</p>
       <div class="field">
         <label for="email">Email</label>
-        <input id="email" v-model="email" type="email" autocomplete="username" required data-test="email" />
+        <input id="email" v-model="email" type="email" autocomplete="username" placeholder="you@example.com" required data-test="email" />
       </div>
-      <div class="field" style="margin-top: 12px">
-        <label for="password">Password</label>
+      <div class="field">
+        <div class="auth-label-row">
+          <label for="password">Password</label>
+          <RouterLink to="/forgot-password" class="auth-link" data-test="forgot-password">Forgot password?</RouterLink>
+        </div>
         <div class="password-wrap">
           <input
             id="password"
@@ -43,14 +49,7 @@
           </button>
         </div>
       </div>
-      <div class="form-actions">
-        <button type="submit" :disabled="busy" data-test="sign-in">{{ busy ? 'Signing in...' : 'Sign in' }}</button>
-      </div>
-      <RouterLink to="/forgot-password" data-test="forgot-password">Forgot password?</RouterLink>
-      <div class="form-actions"><button type="button" :disabled="busy" data-test="google-sign-in" @click="onGoogle">Continue with Google</button></div>
-      <p class="muted" style="margin-top: 12px; font-size: 13px">
-        Google accounts still need an assigned Admin or Editor role. Accounts are managed in Supabase Dashboard → Authentication.
-      </p>
+      <button type="submit" class="auth-submit" :disabled="busy" data-test="sign-in">{{ busy ? 'Signing in...' : 'Sign in' }}</button>
     </form>
   </div>
 </template>
@@ -58,8 +57,6 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import { RouterLink, useRoute, useRouter } from 'vue-router';
-import { createAccountAuth } from '@/services/account-auth';
-import { supabase } from '@/lib/supabase';
 import { safeRedirect } from '@/lib/validation';
 import { useSession } from '@/stores/session';
 
@@ -72,15 +69,6 @@ const password = ref('');
 const showPassword = ref(false);
 const error = ref('');
 const busy = ref(false);
-
-async function onGoogle() {
-  error.value = ''; busy.value = true;
-  try {
-    sessionStorage.setItem('1locate-auth-redirect', safeRedirect(route.query.redirect));
-    await createAccountAuth(supabase).google();
-  } catch (err) { error.value = err instanceof Error ? err.message : 'Google sign-in failed.'; }
-  finally { busy.value = false; }
-}
 
 async function onSubmit() {
   error.value = '';

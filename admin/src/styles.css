@@ -474,6 +474,40 @@ button.icon-btn svg { width: 16px; height: 16px; }
 .page-brand-logo { width: 30px; height: 36px; object-fit: contain; }
 .login-brand-logo { display: block; width: 64px; height: 76px; object-fit: contain; margin: 0 auto 12px; }
 
+/* Sign-in and password reset screens. */
+.auth-card {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 32px 28px 28px;
+  border-radius: 18px;
+  box-shadow: 0 1px 2px rgba(11, 37, 69, 0.06), 0 16px 40px rgba(11, 37, 69, 0.08);
+}
+.auth-card .notice { margin: 0; }
+.auth-header { text-align: center; margin-bottom: 4px; }
+.auth-header .login-brand-logo { margin-bottom: 14px; }
+.auth-header h1 { margin-bottom: 6px; }
+.auth-header p { margin: 0; font-size: 14px; }
+.auth-header strong { color: var(--ink); overflow-wrap: anywhere; }
+.auth-label-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.auth-hint { margin: -8px 0 0; font-size: 13px; color: var(--muted); }
+.auth-link {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--admin-accent);
+  text-decoration: none;
+  border-radius: 4px;
+}
+.auth-link:hover { color: var(--admin-accent-hover); text-decoration: underline; }
+.auth-link:focus-visible { outline: 2px solid var(--admin-accent); outline-offset: 2px; }
+.auth-submit { width: 100%; height: 46px; margin-top: 4px; font-size: 15px; }
+.auth-secondary-row { display: flex; gap: 8px; margin-top: -4px; }
+.auth-secondary-row button { flex: 1 1 0; }
+.auth-footer { text-align: center; }
+@media (max-width: 480px) {
+  .auth-card { padding: 24px 18px 20px; }
+}
+
 /* Consistent compact summaries and touch controls across admin phone screens. */
 @media (max-width: 640px) {
   .content .mini-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; margin-bottom: 12px; }

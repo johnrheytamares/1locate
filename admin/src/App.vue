@@ -25,7 +25,8 @@ const router = useRouter();
 const route = useRoute();
 
 watch(() => session.state.status, (status) => {
-  if (status === 'signed-out' && !route.meta.public) {
+  // Before the first navigation resolves, route is the empty start location; the router guard handles that case.
+  if (status === 'signed-out' && route.matched.length > 0 && !route.meta.public) {
     void router.replace({ name: 'login' });
   }
 });
