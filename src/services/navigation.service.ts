@@ -1,6 +1,5 @@
 import { DESTINATIONS } from '@/data/destinations';
 import {
-  FACING_TOLERANCE_DEGREES,
   type Destination,
   type NavigationMode,
   type NavigationSnapshot,
@@ -242,6 +241,7 @@ export function needsTurn(state: NavigationSnapshot): boolean {
  * Steps only count while the phone faces the path the route expects.
  */
 export function walkBlockReason(state: NavigationSnapshot, _phoneHeading: number | null): string | null {
+  void _phoneHeading;
   if (state.paused) return 'guidance paused';
   if (hasArrived(state)) return 'estimated route complete';
   if (needsTurn(state)) return 'confirm the turn at the actual hallway junction';
@@ -319,6 +319,7 @@ export function arrivalInstruction(destinationName: string): string {
 }
 
 export function navigationInstruction(state: NavigationSnapshot, _phoneHeading: number | null = null): string {
+  void _phoneHeading;
   if (hasArrived(state)) return arrivalInstruction(state.destinationName);
   if (state.paused) return PAUSED_INSTRUCTION;
   if (state.forwardHeading == null) return routeInstruction(state);

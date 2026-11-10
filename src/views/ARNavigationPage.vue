@@ -361,7 +361,7 @@ import { useOutdoorRouting } from '@/composables/useOutdoorRouting';
 import { useIndoorWalking } from '@/composables/useIndoorWalking';
 import { useVoice } from '@/composables/useVoice';
 import { SHOW_DEV_TOOLS } from '@/config/dev-tools';
-import { FACING_TOLERANCE_DEGREES, TURN_ALIGNMENT_HOLD_MS, type Destination } from '@/models/navigation';
+import { Destination } from '@/models/navigation';
 import { startRearPreview, stopRearPreview } from '@/services/camera.service';
 import { LOCATION_MESSAGES } from '@/services/location.service';
 import {
