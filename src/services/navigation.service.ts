@@ -61,7 +61,7 @@ function snapshotFrom(destination: Destination): NavigationSnapshot {
 
 /** Route progress only moves after Set Forward, and never while guidance is paused. */
 function canProgress(state: NavigationSnapshot): boolean {
-  return !state.paused && state.steps.length > 0;
+  return state.forwardHeading != null && !state.paused && state.steps.length > 0;
 }
 
 export function getDestinations(): Destination[] {
@@ -241,22 +241,14 @@ export function needsTurn(state: NavigationSnapshot): boolean {
  * Why estimated walking cannot add distance right now, or null when it can.
  * Steps only count while the phone faces the path the route expects.
  */
-export function walkBlockReason(
-  state: NavigationSnapshot,
-  _phoneHeading: number | null
-): string | null {
-  // Keep the argument for compatibility with existing navigation callers.
-  void _phoneHeading;
+export function walkBlockReason(state: NavigationSnapshot, phoneHeading: number | null): string | null {
   if (state.paused) return 'guidance paused';
-
-  if (hasArrived(state)) {
-    return 'estimated route complete';
-  }
-
-  if (needsTurn(state)) {
-    return 'confirm the turn before continuing';
-  }
-
+  if (hasArrived(state)) return 'route complete';
+  if (state.forwardHeading == null) return 'forward direction not set';
+  if (needsTurn(state)) return 'turn not made yet';
+  if (phoneHeading == null) return 'phone heading unavailable';
+  const offset = headingOffset(phoneHeading, requiredHeading(state)) ?? 180;
+  if (Math.abs(offset) > FACING_TOLERANCE_DEGREES) return `phone ${Math.round(Math.abs(offset))}° off the path`;
   return null;
 }
 
@@ -333,9 +325,7 @@ export function arrivalInstruction(destinationName: string): string {
 export function navigationInstruction(state: NavigationSnapshot, phoneHeading: number | null = null): string {
   if (hasArrived(state)) return arrivalInstruction(state.destinationName);
   if (state.paused) return PAUSED_INSTRUCTION;
-  if (state.forwardHeading == null) {
-  return routeInstruction(state);
-  }
+  if (state.forwardHeading == null) return CALIBRATION_INSTRUCTION;
 
   const required = requiredHeading(state);
   const offset = headingOffset(phoneHeading, required);
