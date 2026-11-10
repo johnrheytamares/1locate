@@ -23,7 +23,7 @@ export function buildIndoorJourney(destinationId:string, buildingId:string, floo
 }
 export function mergeStraightSteps(steps:EditableStep[]):EditableStep[] { return mergeStraightInstructions(steps.map(s=>({...s,kind:s.kind||'walk',direction:s.direction as 'straight'|'left'|'right'}))); }
 
-export function destinationPayload(id: string, room: Room, building: Building, steps: EditableStep[]) {
+export function destinationPayload(id: string, room: Room, building: Building, steps: EditableStep[], outdoorOnly = false) {
   const key = id.trim();
   if (!/^[a-z0-9][a-z0-9_-]{0,119}$/.test(key)) throw new Error('Use a unique ID of 1–120 lowercase letters, digits, hyphens or underscores.');
   if (room.building_id !== building.id) throw new Error('The room must belong to the selected building.');
@@ -32,7 +32,7 @@ export function destinationPayload(id: string, room: Room, building: Building, s
   return {
     id: key, room_id: room.id, name: room.name, type: room.type, building: building.name,
     entrance_name: entrance, entrance_lat: building.entrance_lat, entrance_lng: building.entrance_lng,
-    arrival_radius: building.arrival_radius, indoor_route: hasFloorTransitions(steps) ? [] : validatedRoute(steps), ...(hasFloorTransitions(steps)?{indoor_journey:buildIndoorJourney(key,building.id,room.floor_id,steps)}:{}), is_active: false,
+    arrival_radius: building.arrival_radius, indoor_route: outdoorOnly || hasFloorTransitions(steps) ? [] : validatedRoute(steps), ...(hasFloorTransitions(steps)?{indoor_journey:buildIndoorJourney(key,building.id,room.floor_id,steps)}:{}), is_active: false,
     sort_order: room.sort_order,
   };
 }

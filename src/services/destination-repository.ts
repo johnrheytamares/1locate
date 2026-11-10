@@ -1,3 +1,4 @@
+import { navigationType, type DestinationNavigation } from '../../shared/destination-navigation';
 import { parseIndoorJourney, type IndoorJourney } from '../../shared/indoor-tracking';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { DESTINATIONS } from '@/data/destinations';
@@ -109,10 +110,17 @@ export function toDestination(row: unknown): Destination | null {
     return null;
   }
 
+  let mode: ReturnType<typeof navigationType>;
+  try { mode=navigationType(record.navigation_type); } catch { return null; }
+  const config=record.navigation_config as DestinationNavigation|undefined;
+  if(record.navigation_type!=null && (!config || config.type!==mode || !/^[a-z0-9_-]{1,80}$/.test(config.locationId)))return null;
+  if(record.navigation_type!=null && mode==='hybrid' && config?.checkpoint?.endpointId!==config?.endpointId)return null;
+  if(record.navigation_type!=null && mode!=='indoor' && (!config?.endpointId || !config.entrance || !isValidCoordinate(config.entrance.latitude,config.entrance.longitude)))return null;
+  if(record.navigation_type!=null && mode!=='outdoor-only' && (!config?.checkpoint?.verified || !config.checkpoint.name?.trim()))return null;
   const rawRoute = record.indoor_route;
   let indoorJourney: IndoorJourney | undefined;
-  if(record.indoor_journey!=null){try{indoorJourney=parseIndoorJourney(record.indoor_journey);if(indoorJourney.destinationId!==id||indoorJourney.status!=='validated'||record.building_id&&indoorJourney.buildingId!==record.building_id)return null;}catch{return null;}}
-  if (!Array.isArray(rawRoute) || (!rawRoute.length && !indoorJourney) || rawRoute.length > MAX_ROUTE_STEPS) return null;
+  if(mode!=='outdoor-only' && record.indoor_journey!=null){try{indoorJourney=parseIndoorJourney(record.indoor_journey);if(indoorJourney.destinationId!==id||indoorJourney.status!=='validated'||record.building_id&&indoorJourney.buildingId!==record.building_id)return null;}catch{return null;}}
+  if (!Array.isArray(rawRoute) || (!rawRoute.length && !indoorJourney && mode!=='outdoor-only') || rawRoute.length > MAX_ROUTE_STEPS) return null;
   const indoorRoute = rawRoute.map(routeStep);
   if (indoorRoute.some((step) => step == null)) return null;
 
@@ -121,10 +129,12 @@ export function toDestination(row: unknown): Destination | null {
     name,
     building,
     type,
+    ...(record.navigation_type!=null?{navigationType:mode,navigationConfig:config}:{}),
     outdoorTarget: {
-      name: entranceName,
-      latitude: unsurveyed ? null : (latitude as number),
-      longitude: unsurveyed ? null : (longitude as number),
+      ...(config && mode!=='indoor'?{networkId:config.locationId,endpointId:config.endpointId}:{}),
+      name: config ? (mode==='indoor' ? config.checkpoint!.name : config.endpointName || entranceName) : entranceName,
+      latitude: config && mode!=='indoor' ? config.entrance!.latitude : unsurveyed ? null : (latitude as number),
+      longitude: config && mode!=='indoor' ? config.entrance!.longitude : unsurveyed ? null : (longitude as number),
       arrivalRadius: radius,
     },
     indoorRoute: indoorRoute as RouteStep[],
@@ -231,7 +241,8 @@ function validated(rows: unknown[], map: (row: unknown) => Destination | null): 
 export async function fetchDestinations(client: SupabaseClient | null = supabase): Promise<DestinationLoadResult> {
   if (!client) return local('Supabase is not configured', false);
   try {
-    let catalog = await query(client, 'navigation_catalog', `${CATALOG_COLUMNS}, indoor_journey`);
+    let catalog = await query(client, 'navigation_catalog', `${CATALOG_COLUMNS}, indoor_journey, navigation_type, navigation_config`);
+    if(catalog.error && ['42703','PGRST204'].includes(catalog.error.code||''))catalog=await query(client,'navigation_catalog',`${CATALOG_COLUMNS}, indoor_journey`);
     if(catalog.error && ['42703','PGRST204'].includes(catalog.error.code||''))catalog=await query(client,'navigation_catalog',CATALOG_COLUMNS);
     if (!catalog.error) {
       const result = validated(catalog.data, toCatalogDestination);
@@ -242,7 +253,8 @@ export async function fetchDestinations(client: SupabaseClient | null = supabase
     }
     if (!isMissingRelation(catalog.error)) return local(catalog.error.message, true);
 
-    let legacy = await query(client, 'destinations', `${LEGACY_COLUMNS}, indoor_journey`);
+    let legacy = await query(client, 'destinations', `${LEGACY_COLUMNS}, indoor_journey, navigation_type, navigation_config`);
+    if(legacy.error && ['42703','PGRST204'].includes(legacy.error.code||''))legacy=await query(client,'destinations',`${LEGACY_COLUMNS}, indoor_journey`);
     if(legacy.error && ['42703','PGRST204'].includes(legacy.error.code||''))legacy=await query(client,'destinations',LEGACY_COLUMNS);
     if (legacy.error) return local(legacy.error.message, true);
     const result = validated(legacy.data, toDestination);

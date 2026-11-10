@@ -6,7 +6,7 @@ import type { AppRole, Building, DestinationRecord, Floor, MapLabel, Room, UserR
 
 type Client = SupabaseClient | null;
 
-export function createDestination(payload: ReturnType<typeof import('@/lib/route-editor').destinationPayload>, client: Client = supabase): Promise<DestinationRecord> {
+export function createDestination(payload: ReturnType<typeof import('@/lib/route-editor').destinationPayload> & Partial<Pick<DestinationRecord,'navigation_type'|'navigation_config'>>, client: Client = supabase): Promise<DestinationRecord> {
   return changed(requireClient(client).from('destinations').insert({ ...payload, is_active: false }).select(DESTINATION_COLUMNS));
 }
 
@@ -21,7 +21,7 @@ export function saveDestinationJourney(id: string, journey: import('../../../sha
   return changed(requireClient(client).from('destinations').update({ indoor_journey: journey, indoor_route: [], is_active: false }).eq('id', id).select(DESTINATION_COLUMNS));
 }
 
-const DESTINATION_COLUMNS = 'id, name, building, type, entrance_name, room_id, is_active, sort_order, indoor_route, indoor_journey';
+const DESTINATION_COLUMNS = 'id, name, building, type, entrance_name, room_id, is_active, sort_order, indoor_route, indoor_journey, navigation_type, navigation_config';
 const ROLE_COLUMNS = 'user_id, role, granted_by, created_at, updated_at';
 
 interface Result<T> {
@@ -201,4 +201,7 @@ export function changeRole(userId: string, role: AppRole, grantedBy: string, cli
 
 export function removeRole(userId: string, client: Client = supabase): Promise<{ user_id: string }> {
   return changed(requireClient(client).from('user_roles').delete().eq('user_id', userId).select('user_id'));
+}
+export function saveDestinationNavigation(id:string,payload:Partial<DestinationRecord>,client:Client=supabase):Promise<DestinationRecord>{
+ return changed(requireClient(client).from('destinations').update({...payload,is_active:false}).eq('id',id).select(DESTINATION_COLUMNS));
 }

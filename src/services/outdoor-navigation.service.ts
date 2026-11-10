@@ -17,6 +17,8 @@ export type GpsTargetSource = 'surveyed' | 'test';
 
 /** Outdoor target with usable coordinates. */
 export interface GpsTarget {
+  networkId?: string;
+  endpointId?: string;
   name: string;
   latitude: number;
   longitude: number;
@@ -56,6 +58,7 @@ export function surveyedTarget(target: OutdoorTarget): GpsTarget | null {
     longitude: target.longitude as number,
     arrivalRadius: target.arrivalRadius,
     source: 'surveyed',
+    ...(target.networkId ? {networkId:target.networkId,endpointId:target.endpointId} : {}),
   };
 }
 

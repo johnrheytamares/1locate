@@ -5,7 +5,8 @@
       <div class="editor-title"><span class="eyebrow">DESTINATION ROUTE</span><h2>{{ destination ? 'Edit route' : 'Add Destination' }}</h2><p>{{ destination?.name || 'Build a route from the entrance to your room.' }}</p><span v-if="building" class="destination-context">{{ building.name }} · {{ floorName }}</span></div>
       <span class="state-pill" :class="{ active: recording }"><span class="state-dot" aria-hidden="true"></span> {{ starting ? 'Preparing' : recording ? 'Recording' : paused ? 'Paused' : 'Draft route' }}</span>
     </header>
-    <p class="intro">Choose a room, calibrate once, then walk and mark the turns. Distance is estimated from real detected steps; review it before saving.</p>
+    <DestinationNavigationSettings v-model="navigationConfig" :indoor-valid="indoorValid" :disabled="busy || recording || paused || starting" />
+    <p v-if="!outdoorOnly" class="intro">Choose a room, calibrate once, then walk and mark the turns. Distance is estimated from real detected steps; review it before saving.</p>
     <p v-if="error" class="notice error" role="alert">{{ error }}</p>
     <div class="workspace" :class="{ 'is-recording': recording || paused || starting, 'manual-workspace': !recordingMode }">
     <section v-show="!recording && !paused && !starting" class="setup-panel">
@@ -19,11 +20,11 @@
         <svg class="entrance-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M19 10c0 5-7 11-7 11S5 15 5 10a7 7 0 1 1 14 0Z" /><circle cx="12" cy="10" r="2.5" /></svg>
         <div><span class="eyebrow">STARTING POINT</span><strong>{{ building?.entrance_name || 'Set the building entrance name first' }}</strong><small>{{ building?.name || 'Choose a linked room to get started' }}</small></div>
       </div>
-      <label v-if="recordingMode" class="entrance-check" :class="{ confirmed: atEntrance }"><input v-model="atEntrance" type="checkbox" /> <span><strong>I am at this entrance</strong><small>Facing the first corridor, ready to walk.</small></span></label>
-      <IndoorStepCalibration v-if="recordingMode" :disabled="recording || paused || starting || busy" :user="session.state.userId || 'local'" @calibrated="calibrated" @activity="calibrating = $event" /><label v-if="recordingMode && availableFloors.length">Starting floor<select v-model="currentFloor" :disabled="recording || starting"><option value="">Choose starting floor</option><option v-for="floor in availableFloors" :key="floor.id" :value="floor.id">{{ floor.name }}</option></select></label><label v-if="recordingMode" class="stride-field"><span>Walking step length</span><span class="unit-input"><input :value="profile?.stride || ''" readonly type="number" min="0.2" max="1.5" step="0.01" inputmode="decimal" /><span aria-hidden="true">m / step</span></span><small>{{ profile ? 'Saved calibration on this device.' : 'Complete a measured calibration walk to enable automatic distance.' }}</small></label>
+      <label v-if="!outdoorOnly && recordingMode" class="entrance-check" :class="{ confirmed: atEntrance }"><input v-model="atEntrance" type="checkbox" /> <span><strong>I am at this entrance</strong><small>Facing the first corridor, ready to walk.</small></span></label>
+      <IndoorStepCalibration v-if="!outdoorOnly && recordingMode" :disabled="recording || paused || starting || busy" :user="session.state.userId || 'local'" @calibrated="calibrated" @activity="calibrating = $event" /><label v-if="!outdoorOnly && recordingMode && availableFloors.length">Starting floor<select v-model="currentFloor" :disabled="recording || starting"><option value="">Choose starting floor</option><option v-for="floor in availableFloors" :key="floor.id" :value="floor.id">{{ floor.name }}</option></select></label><label v-if="!outdoorOnly && recordingMode" class="stride-field"><span>Walking step length</span><span class="unit-input"><input :value="profile?.stride || ''" readonly type="number" min="0.2" max="1.5" step="0.01" inputmode="decimal" /><span aria-hidden="true">m / step</span></span><small>{{ profile ? 'Saved calibration on this device.' : 'Complete a measured calibration walk to enable automatic distance.' }}</small></label>
     </fieldset>
     </section>
-    <section v-if="recordingMode" class="recorder-panel">
+    <section v-if="!outdoorOnly && recordingMode" class="recorder-panel">
     <h3><span class="section-number">02</span> Record your route</h3>
     <div v-if="recording || paused || starting" ref="cameraPanel" class="camera-recorder">
       <video ref="video" autoplay muted playsinline aria-label="Live route recording camera" />
@@ -62,8 +63,8 @@
     <p class="record-hint">Distances are estimates. Check and correct them before saving.</p>
     </section>
     </div>
-    <label v-show="!recording && !paused && !starting" class="recording-choice"><input v-model="recordingMode" type="checkbox" /> Use the automatic camera recorder (manual editing is available below)</label>
-    <section v-show="!recording && !paused && !starting" ref="review" class="route-panel" tabindex="-1">
+    <label v-show="!outdoorOnly && !recording && !paused && !starting" class="recording-choice"><input v-model="recordingMode" type="checkbox" /> Use the automatic camera recorder (manual editing is available below)</label>
+    <section v-show="!outdoorOnly && !recording && !paused && !starting" ref="review" class="route-panel" tabindex="-1">
     <div class="route-heading"><h3><span class="section-number">03</span> Review instructions</h3><div class="route-summary"><span>{{ steps.length }} / 50 segments</span><strong>{{ totalMeters.toFixed(2) }} m total</strong></div></div>
     <p v-if="!steps.length" class="route-empty">Record a walk to create instructions automatically, or use Add instruction for measured manual entry.</p>
     <p class="record-hint">Floor changes are confirmed checkpoints. They never count as walking meters.</p>
@@ -97,18 +98,23 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { onBeforeRouteLeave } from 'vue-router';
 import type { Building, DestinationRecord, Floor, Room } from '@/types';
+import DestinationNavigationSettings from './DestinationNavigationSettings.vue';
+import type { DestinationNavigation } from '../../../shared/destination-navigation';
 import IndoorStepCalibration from './IndoorStepCalibration.vue';
 import { IndoorStepSource, readCalibration } from '../services/indoor-steps';
 import { App } from '@capacitor/app';
 import { type PluginListenerHandle, Capacitor } from '@capacitor/core';
 import type { StrideProfile, IndoorMeasurement } from '../../../shared/indoor-tracking';
 import { destinationPayload, validatedRoute, hasFloorTransitions, buildIndoorJourney, mergeStraightSteps, type EditableStep } from '@/lib/route-editor';
-import { createDestination, saveDestinationRoute, saveDestinationJourney } from '@/services/campus';
+import { createDestination, saveDestinationRoute, saveDestinationJourney, saveDestinationNavigation } from '@/services/campus';
 import { describeError } from '@/lib/errors';
 import { useSession } from '@/stores/session';
 
 const props = defineProps<{ rooms: Room[]; buildings: Building[]; floors?: Floor[]; destination?: DestinationRecord; initialRoom?: string }>();
 const emit = defineEmits<{ saved: [DestinationRecord]; close: [] }>();
+const navigationConfig=ref<DestinationNavigation|null>(props.destination?.navigation_config ? structuredClone(props.destination.navigation_config) : null);
+const outdoorOnly=computed(()=>navigationConfig.value?.type==='outdoor-only');
+const indoorValid=computed(()=>{try{if(multiFloor.value)return buildIndoorJourney(id.value,building.value!.id,linkedRoom.value?.floor_id||null,steps.value,routeChecked.value).status==='validated';validatedRoute(steps.value);return true;}catch{return false;}});
 const id = ref(props.destination?.id ?? crypto.randomUUID());
 const roomId = ref(props.destination?.room_id ?? props.initialRoom ?? '');
 const building = computed(() => props.buildings.find(b => b.id === props.rooms.find(r => r.id === roomId.value)?.building_id));
@@ -135,8 +141,8 @@ const direction = ref('straight');
 const directionLabel = computed(() => ({ straight: '↑ Straight', left: '← Left', right: '→ Right' })[direction.value]);
 const totalMeters = computed(() => steps.value.reduce((sum, step) => sum + (Number.isFinite(step.distance) ? step.distance : 0), 0));
 let stream: MediaStream | null = null;
-const original = JSON.stringify({ id: id.value, roomId: roomId.value, steps: steps.value });
-const dirty = computed(() => original !== JSON.stringify({ id: id.value, roomId: roomId.value, steps: steps.value }) || meters.value > 0 || recording.value || paused.value || starting.value);
+const original = JSON.stringify({ id: id.value, roomId: roomId.value, steps: steps.value, navigationConfig: navigationConfig.value });
+const dirty = computed(() => original !== JSON.stringify({ id: id.value, roomId: roomId.value, steps: steps.value, navigationConfig: navigationConfig.value }) || meters.value > 0 || recording.value || paused.value || starting.value);
 const error = ref('');
 const busy = ref(false);
 const recording = ref(false);
@@ -162,7 +168,7 @@ try {
   if (raw) {
     const draft = JSON.parse(raw);
     if (typeof draft.id === 'string' && typeof draft.roomId === 'string' && Array.isArray(draft.steps)) {
-      id.value = draft.id; roomId.value = draft.roomId;if(typeof draft.currentFloor==='string')currentFloor.value=draft.currentFloor;
+      id.value = draft.id; roomId.value = draft.roomId;if(draft.navigationConfig)navigationConfig.value=draft.navigationConfig;if(typeof draft.currentFloor==='string')currentFloor.value=draft.currentFloor;
       steps.value = draft.steps.slice(0, 50).filter((s: EditableStep) => s && typeof s.direction === 'string' && typeof s.distance === 'number');
       status.value = 'Recovered unsaved draft. Check all segments before saving.';
     }
@@ -171,13 +177,13 @@ try {
 function persist() {
   try {
     const pending = meters.value > 0 ? [{kind:'walk', direction: direction.value, distance: meters.value,method:manual.value?'manual':profile.value?.method,...(!manual.value&&profile.value?{calibration:{...profile.value}}:{}),recordedAt:new Date().toISOString()}] : [];
-    const draft=JSON.stringify({id:id.value,roomId:roomId.value,currentFloor:currentFloor.value,steps:[...steps.value,...pending]});sessionStorage.setItem(draftKey,draft);try{localStorage.setItem(draftKey,draft);}catch{ /* Session recovery remains available. */ }
+    const draft=JSON.stringify({id:id.value,roomId:roomId.value,navigationConfig:navigationConfig.value,currentFloor:currentFloor.value,steps:[...steps.value,...pending]});sessionStorage.setItem(draftKey,draft);try{localStorage.setItem(draftKey,draft);}catch{ /* Session recovery remains available. */ }
   } catch { /* Saving to Supabase remains available. */ }
 }
 
 let generation = 0;
 let beforeRecording: EditableStep[] = [];
-watch([id, roomId, steps, meters], persist, { deep: true });
+watch([id, roomId, steps, meters, navigationConfig], persist, { deep: true });
 watch(roomId, () => { atEntrance.value = false; });
 
 function instructionLabel(step:EditableStep){return step.kind&&step.kind!=='walk'?({upstairs:'Go Upstairs',downstairs:'Go Downstairs',elevator:'Use Elevator','arrive-floor':'Arrive at Floor',arrived:'Arrived at Destination'}[step.kind]||step.kind)+(step.floorName?` — ${step.floorName}`:''):({straight:'Continue Straight',left:'Turn Left, then walk',right:'Turn Right, then walk'}[step.direction]||step.direction);}
@@ -281,11 +287,15 @@ async function save() {
   busy.value = true; error.value = '';
   try {
     let saved: DestinationRecord;
-    if (props.destination) saved = multiFloor.value ? await saveDestinationJourney(props.destination.id,buildIndoorJourney(id.value,building.value!.id,linkedRoom.value?.floor_id||null,steps.value,routeChecked.value)) : await saveDestinationRoute(props.destination.id, validatedRoute(steps.value));
+    if (props.destination && (navigationConfig.value || props.destination.navigation_type)) {
+      const payload:Partial<DestinationRecord>={navigation_type:navigationConfig.value?.type||null,navigation_config:navigationConfig.value?{...navigationConfig.value,indoorRouteValid:indoorValid.value}:null};
+      if(!outdoorOnly.value){if(multiFloor.value){payload.indoor_journey=buildIndoorJourney(id.value,building.value!.id,linkedRoom.value?.floor_id||null,steps.value,routeChecked.value);payload.indoor_route=[];}else{payload.indoor_route=validatedRoute(steps.value);payload.indoor_journey=null;}}
+      saved=await saveDestinationNavigation(props.destination.id,payload);
+    } else if (props.destination) saved = multiFloor.value ? await saveDestinationJourney(props.destination.id,buildIndoorJourney(id.value,building.value!.id,linkedRoom.value?.floor_id||null,steps.value,routeChecked.value)) : await saveDestinationRoute(props.destination.id, validatedRoute(steps.value));
     else {
       const room = props.rooms.find(r => r.id === roomId.value);
       if (!room || !building.value) throw new Error('Choose a room with a building.');
-      const payload=destinationPayload(id.value,room,building.value,steps.value);if(payload.indoor_journey)payload.indoor_journey=buildIndoorJourney(id.value,building.value.id,room.floor_id,steps.value,routeChecked.value);saved = await createDestination(payload);
+      const payload=destinationPayload(id.value,room,{...building.value,entrance_name:navigationConfig.value?.type==='indoor'?navigationConfig.value.checkpoint?.name||building.value.entrance_name:navigationConfig.value?.endpointName||building.value.entrance_name},steps.value,outdoorOnly.value);if(payload.indoor_journey)payload.indoor_journey=buildIndoorJourney(id.value,building.value.id,room.floor_id,steps.value,routeChecked.value);saved = await createDestination({...payload,...(navigationConfig.value?{navigation_type:navigationConfig.value.type,navigation_config:{...navigationConfig.value,indoorRouteValid:indoorValid.value}}:{})});
     }
 
     try { sessionStorage.removeItem(draftKey);try{localStorage.removeItem(draftKey);}catch{ /* Local draft storage may be unavailable. */ } } catch { /* Storage may be disabled. */ }

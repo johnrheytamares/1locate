@@ -69,7 +69,7 @@ export function useOutdoorRouting(state: Ref<OutdoorState>, active: Ref<boolean>
   }
   function cancel() { controller?.abort(); controller = null; }
   watch([active, () => state.value.target], () => {
-    const key = state.value.target ? `${state.value.target.latitude},${state.value.target.longitude}` : '';
+    const key = state.value.target ? `${state.value.target.networkId || ''}:${state.value.target.endpointId || ''}:${state.value.target.latitude},${state.value.target.longitude}` : '';
     if (!active.value || key !== targetKey) {
       cancel(); route.value = null; progress.value = null; status.value = 'idle';
       outside = 0; lastFix = -Infinity; lastRequest = -Infinity; targetKey = key;

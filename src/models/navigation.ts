@@ -17,6 +17,8 @@ export interface RouteStep {
  * Reaching it never means the indoor room was reached.
  */
 export interface OutdoorTarget {
+  networkId?: string;
+  endpointId?: string;
   name: string;
   /** Surveyed latitude. Null until verified campus coordinates are available. */
   latitude: number | null;
@@ -27,6 +29,8 @@ export interface OutdoorTarget {
 }
 
 export interface Destination {
+  navigationType?: import('../../shared/destination-navigation').NavigationType;
+  navigationConfig?: import('../../shared/destination-navigation').DestinationNavigation;
   id: string;
   name: string;
   building: string;

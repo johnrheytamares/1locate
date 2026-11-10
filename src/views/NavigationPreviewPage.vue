@@ -2,12 +2,13 @@
   <ion-page class="preview-page" :style="{ '--preview-panel-height': `${panelHeight + 10}px` }">
     <ion-header><ion-toolbar><ion-buttons slot="start"><ion-back-button :default-href="detailsPath" text="" /></ion-buttons><ion-title>Navigation Preview</ion-title></ion-toolbar></ion-header>
     <ion-content :scroll-y="false">
-      <DestinationMapPreview v-if="destination && active" ref="preview" :entrance="destination.outdoorTarget" fullscreen @location="userLocation = $event" @route="walkingRoute = $event" />
+      <DestinationMapPreview v-if="destination && active && destination.navigationType !== 'indoor'" ref="preview" :entrance="destination.outdoorTarget" fullscreen @location="userLocation = $event" @route="walkingRoute = $event" />
+    <p v-if="destination?.navigationType === 'indoor'" class="checkpoint-intro">Start at {{ destination.outdoorTarget.name }}. You will confirm this checkpoint before indoor guidance begins.</p>
     </ion-content>
     <ion-footer v-if="destination && summary"><section ref="panel" class="preview-panel">
       <h1>{{ destination.name }}</h1><p>{{ destination.building }}<template v-if="summary.floor"> &middot; {{ summary.floor }}</template></p>
       <p>Entrance: {{ summary.entranceName }}</p>
-      <div class="metrics"><span>{{ (destination.indoorJourney?.instructions.length || destination.indoorRoute.length) }} indoor instructions &middot; {{ summary.indoorMeters.toFixed(1) }} m indoors</span><span v-if="walkingRoute">{{ Math.round(walkingRoute.distance) }} m walking &middot; ~{{ Math.max(1, Math.round(walkingRoute.duration / 60)) }} min</span><span v-else-if="distance !== null">{{ Math.round(distance) }} m to entrance (straight-line)</span></div>
+      <div class="metrics"><span v-if="destination.navigationType === 'outdoor-only'">Outdoor walking route · Confirm arrival at the entrance</span><span v-else>{{ (destination.indoorJourney?.instructions.length || destination.indoorRoute.length) }} indoor instructions &middot; {{ summary.indoorMeters.toFixed(1) }} m indoors</span><span v-if="walkingRoute">{{ Math.round(walkingRoute.distance) }} m walking &middot; ~{{ Math.max(1, Math.round(walkingRoute.duration / 60)) }} min</span><span v-else-if="distance !== null">{{ Math.round(distance) }} m to entrance (straight-line)</span></div>
       <ion-button expand="block" :disabled="starting" data-test="start-navigation" @click="start">Start Navigation</ion-button>
     </section></ion-footer>
   </ion-page>

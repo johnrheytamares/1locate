@@ -43,10 +43,12 @@
       <h2>Install in the mobile app</h2><p>Published GPS routes synchronize and cache automatically in the updated mobile app. Manual file installation is only a fallback: replace <code>public/campus-walking-network.json</code> in the mobile project and rebuild the app. Existing installations need this feature update once; later published data updates do not need another APK.</p>
     </div></details>
     </div></details>
+    <NetworkPublisher v-if="!recorderBusy" :graph="graph" @network="graph = $event" />
   </section>
 </template>
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
+import NetworkPublisher from '../components/NetworkPublisher.vue';
 import GpsRouteRecorder from '../components/GpsRouteRecorder.vue';
 import OutdoorNetworkCanvas from '../components/OutdoorNetworkCanvas.vue';
 import { loadPublishedNetwork } from '../services/outdoor-recordings';

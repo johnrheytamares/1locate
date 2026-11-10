@@ -12,10 +12,16 @@ export interface OutdoorWalkingRoute extends WalkingRoute {
 }
 
 /** The bundled network is optional. An invalid configured network fails closed. */
-export async function fetchOutdoorRoute(start: Point, end: Point, signal: AbortSignal): Promise<OutdoorWalkingRoute> {
-  const graph = await loadOutdoorNetwork(signal);
+export async function fetchOutdoorRoute(start: Point, end: Point & {networkId?:string;endpointId?:string}, signal: AbortSignal): Promise<OutdoorWalkingRoute> {
+  let graph = await loadOutdoorNetwork(signal,end.networkId);
+  if(end.networkId){
+    const endpoint=graph.nodes.find(n=>n.id===end.endpointId&&n.entrance);
+    if(!endpoint || calculateDistance(endpoint.latitude,endpoint.longitude,end.latitude,end.longitude)>.2)throw new Error('The published endpoint changed. Refresh destination details before navigating.');
+    graph={...graph,nodes:graph.nodes.map(n=>({...n,entrance:n.id===end.endpointId}))};
+  }
   const campus = campusWalkingRoute(graph, start, end);
   if (campus) return campus;
+  if(end.networkId)throw new Error('No verified walking connection reaches this destination.');
   const route = await fetchWalkingRoute(start, end, signal);
   const first = route.coordinates[0], last = route.coordinates[route.coordinates.length - 1];
   const approachMeters = calculateDistance(start.latitude, start.longitude, first[1], first[0]);

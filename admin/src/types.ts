@@ -77,6 +77,8 @@ export interface RouteStepRecord {
 
 /** A row of the legacy destinations table. The fixed route is read-only here. */
 export interface DestinationRecord {
+  navigation_type?: import('../../shared/destination-navigation').NavigationType | null;
+  navigation_config?: import('../../shared/destination-navigation').DestinationNavigation | null;
   id: string;
   name: string;
   building: string;

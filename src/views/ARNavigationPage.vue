@@ -273,7 +273,7 @@
       :backdrop-dismiss="false"
       :buttons="[
         { text: 'Choose another destination', role: 'cancel' },
-        { text: 'Start indoor route', role: 'confirm' },
+        { text: destination?.navigationType === 'outdoor-only' ? 'Confirm arrival' : 'Start indoor route', role: 'confirm' },
       ]"
       @didDismiss="onEntranceDismiss"
     />
@@ -510,11 +510,13 @@ const entranceUnmapped = computed(() => (
   && outdoor.value.target == null
   && locationPrompt.value == null
 ));
-const entranceMessage = computed(() => (
+const entranceMessage = computed(() => (destination.value?.navigationType==='outdoor-only'
+  ? `Confirm only when you are physically at ${entranceName.value}. GPS proximity alone does not confirm arrival.`
+  : (
   entranceByGps.value
     ? `GPS shows you near the entrance, but it cannot tell where you are inside. Start the route to ${destinationName.value} only when you are standing at ${entranceName.value}, with your phone facing the first corridor.`
     : `1Locate cannot check this with GPS. Start the route to ${destinationName.value} only when you are standing at ${entranceName.value}, with your phone facing the first corridor.`
-));
+)));
 
 const arrived = computed(() => hasArrived(navigation.value));
 const stepIndex = computed(() => currentStepIndex(navigation.value));
@@ -663,7 +665,7 @@ watch(() => outdoor.value.arrived, (isArrived) => {
   stage.value = 'entrance';
   gps.stop();
   showEntrance.value = true;
-  announce(`You are near ${entranceName.value}. Start the indoor route only when you are standing at the entrance.`);
+  announce(destination.value?.navigationType==='outdoor-only' ? `You are near ${entranceName.value}. Confirm only after reaching the destination.` : `You are near ${entranceName.value}. Start the indoor route only when you are standing at the entrance.`);
 });
 
 /** Spoken while guidance is on screen: outdoor guiding or any indoor instruction. */
@@ -815,9 +817,14 @@ function onAtEntrance() {
   stage.value = 'entrance';
   gps.stop();
   showEntrance.value = true;
-  announce(`Start the indoor route only when you are standing at ${entranceName.value}.`);
+  announce(destination.value?.navigationType==='outdoor-only' ? `Confirm arrival only when you are at ${entranceName.value}.` : `Start the indoor route only when you are standing at ${entranceName.value}.`);
 }
 
+async function confirmOutdoorArrival(){
+  if(!destination.value || destination.value.navigationType!=='outdoor-only')return;
+  if(simulationUsed.value){chooseAnotherDestination();return;}
+  confirmRoomArrival(destination.value);await endSession();offerAfterArrival();
+}
 function enterIndoor() {
   const chosen=getSelectedDestination();
   if(chosen?.indoorJourney){authorizeIndoorJourney(chosen.id);void ionRouter.replace(`/indoor-journey/${encodeURIComponent(chosen.id)}`);return;}
@@ -841,6 +848,7 @@ function onEntranceDismiss(event: CustomEvent<{ role?: string }>) {
   if (stage.value !== 'entrance') return;
   const role = event.detail?.role;
   if (role === 'confirm') {
+    if(destination.value?.navigationType==='outdoor-only'){void confirmOutdoorArrival();return;}
     enterIndoor();
   } else if (role === 'cancel') {
     chooseAnotherDestination();
@@ -1052,6 +1060,7 @@ onIonViewDidEnter(async () => {
     }
     appHandle = handle;
   });
+  if(selected.navigationType==='indoor'){stage.value='entrance';entranceByGps.value=false;showEntrance.value=true;void prepareNavigation();return;}
   await gps.start(selected.outdoorTarget);
   if (!pageOpen.value || currentSession !== navigationSession) return;
   simulationUsed.value = gpsSource.value === 'simulated';

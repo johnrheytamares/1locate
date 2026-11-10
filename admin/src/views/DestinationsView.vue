@@ -86,7 +86,8 @@
                 </div>
               </td>
               <td data-label="Fixed Route">
-                <span v-if="routes.get(destination.id)?.valid" class="route">
+                <span v-if="destination.navigation_type === 'outdoor-only'" class="route">Outdoor-only · {{ destination.navigation_config?.endpointName || 'Choose endpoint' }}</span>
+                <span v-else-if="routes.get(destination.id)?.valid" class="route">
                   <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M7 4h2v6h6V8l5 4-5 4v-2H7v6H5V4h2z"/></svg>
                   {{ routes.get(destination.id)?.steps }} steps · {{ routes.get(destination.id)?.meters }} m
                 </span>
@@ -309,7 +310,7 @@ async function onSaveLink(destination: DestinationRecord) {
 async function onToggleActive(destination: DestinationRecord) {
   if (!destination.is_active) {
     try {
-      if(destination.indoor_journey){const journey=parseIndoorJourney(destination.indoor_journey);if(journey.status!=='validated')throw new Error('Review the floor transitions on site and save the validated journey before turning it on.');}else validatedRoute((destination.indoor_route ?? []).map(s => ({ direction: String(s.direction), distance: Number(s.distance) })));
+      if(destination.navigation_type==='outdoor-only'){ /* Server validates the published endpoint and incoming path. */ }else if(destination.indoor_journey){const journey=parseIndoorJourney(destination.indoor_journey);if(journey.status!=='validated')throw new Error('Review the floor transitions on site and save the validated journey before turning it on.');}else validatedRoute((destination.indoor_route ?? []).map(s => ({ direction: String(s.direction), distance: Number(s.distance) })));
     } catch (err) { error.value = (err as Error).message; return; }
     if (!window.confirm('Have you verified this route on site? Turning it on requires a published linked room and building for catalog visibility.')) return;
   }
