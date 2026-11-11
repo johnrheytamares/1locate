@@ -33,7 +33,7 @@
         <div v-if="routeReady" style="display: none" aria-hidden="true"><NavigationOverlay :arrows="arrows" :destination-name="markerName" :distance-label="distanceLabel" :instruction="''" :heading-offset="pathOffset" @vue:mounted="guidanceReady = true" /></div>
         <ul><li>{{ routeReady ? '✓' : '...' }} Loading route</li><li>{{ cameraReady ? '✓ Camera enabled' : cameraMessage ? 'Camera needs attention' : 'Enabling camera...' }}</li><li>{{ guidanceReady ? '✓ Directional overlay initialized' : 'Setting up guidance...' }}</li></ul>
         <progress :value="Number(routeReady) + Number(cameraReady) + Number(guidanceReady)" max="3" aria-label="Completed initialization tasks" />
-        <p>Location: {{ gpsStatus }}<template v-if="heading == null"> &middot; Heading unavailable or waiting for sensor readings. Manual checkpoints are available.</template></p>
+        <p>Location: {{ gpsStatus }}<template v-if="heading == null"> &middot; Heading unavailable or waiting for sensor readings. Manual step controls are available.</template></p>
         <p v-if="cameraMessage" role="alert">{{ cameraMessage }}</p>
         <ion-button v-if="cameraMessage" expand="block" :disabled="cameraBusy" @click="prepareNavigation">Retry camera</ion-button>
         <ion-button v-if="cameraMessage" expand="block" fill="outline" @click="useMapGuidance">Use Map Navigation</ion-button>
@@ -123,24 +123,37 @@
           <ion-button v-if="isOutdoor" size="small" fill="outline" aria-label="Retry walking route" :disabled="outdoorRouting.status.value === 'loading'" @click="outdoorRouting.retry">Retry</ion-button>
           <ion-button v-if="isOutdoor && !showMapWait" size="small" fill="solid" data-test="at-entrance" @click="onAtEntrance">At entrance</ion-button>
           <ion-button size="small" fill="outline" class="stop-action" data-test="stop-navigation" @click="chooseAnotherDestination">Stop</ion-button>
-          <ion-button v-if="stage === 'indoor' && !navigation.paused && !arrived" size="small" fill="outline" @click="showCheckpoint = true">Confirm checkpoint</ion-button>
           <ion-button v-if="stage === 'indoor' && !navigation.paused && !arrived && needsTurn(navigation)" size="small" color="primary" @click="confirmTurn">I completed the turn</ion-button>
         </div>
+        <section v-if="stage === 'indoor' && !navigation.paused && !arrived" class="step-controls" data-test="step-controls" aria-label="Indoor progress controls">
+          <div class="mode-controls" role="group" aria-label="Walking progress mode">
+            <ion-button size="small" :fill="walkingMode === 'automatic' ? 'solid' : 'outline'" data-test="automatic-mode" @click="setWalkingMode('automatic')">Automatic Mode</ion-button>
+            <ion-button size="small" :fill="walkingMode === 'manual' ? 'solid' : 'outline'" data-test="manual-mode" @click="setWalkingMode('manual')">Manual Mode</ion-button>
+          </div>
+          <p>{{ walkingMode === 'automatic' ? 'Progress uses accepted sensor steps.' : `Progress uses reported steps and your ${walkingStepLength.toFixed(2)} m saved stride length.` }}</p>
+          <div v-if="walkingMode === 'manual'" class="manual-step-controls">
+            <ion-button size="small" data-test="manual-step-1" @click="addManualSteps(1)">+1 Step</ion-button>
+            <ion-button size="small" data-test="manual-step-5" @click="addManualSteps(5)">+5 Steps</ion-button>
+            <ion-button size="small" fill="outline" data-test="undo-manual-step" :disabled="manualStepHistory.length === 0" @click="undoManualSteps">Undo</ion-button>
+          </div>
+        </section>
         <details v-if="isOutdoor" class="route-details"><summary>Route &amp; GPS details<span v-if="outdoor.raw">±{{ Math.round(outdoor.raw.accuracy) }} m</span></summary><p role="status">{{ instruction }}</p><p>{{ outdoorRouting.route.value?.source === 'campus' ? 'Campus walking network.' : outdoorRouting.route.value ? 'OpenStreetMap route; check access on site.' : 'No verified walking path yet.' }} Camera arrows are direction overlays, not ground-anchored AR.</p><p v-if="outdoor.target?.source === 'test' || gpsSource === 'simulated'">Test location · not real navigation.</p><p v-if="gpsSource === 'real' && gpsStatus === 'tracking' && !gpsPrecise">Enable Precise Location for a better GPS fix.</p></details>
         <p v-if="mapVisible && stage === 'indoor'" class="evidence-note">Satellite GPS is an outdoor reference only. It does not track the floor or room.</p>
-        <p v-if="stage === 'indoor'" class="evidence-note">Indoor camera marker is informational only, not the physical room location. {{ manualProgress ? 'Progress includes user-confirmed checkpoints.' : 'Step-estimated route progress; not room positioning.' }}<template v-if="heading == null"> Heading unavailable. Follow the written route and confirm checkpoints.</template></p>
+        <p v-if="stage === 'indoor'" class="evidence-note">Indoor camera marker is informational only, not the physical room location. Progress is an estimate based on walking steps, not room positioning.<template v-if="heading == null"> Heading unavailable. Follow the written route instructions.</template></p>
         <div v-if="stage === 'indoor' && arrived && !confirmingRestart" class="route-complete">
-          <p>Estimated route complete. Check the room sign before confirming arrival.</p>
-          <ion-button expand="block" @click="showArrival = true">Confirm destination</ion-button>
+          <h2>You Reached Your Destination!</h2>
+          <p class="completion-destination">{{ destinationName }}</p>
+          <p class="accuracy-note">Route completed based on estimated walking progress. Please check the room sign.</p>
+          <ion-button v-if="walkingMode === 'manual' && manualStepHistory.length" expand="block" fill="outline" data-test="undo-completion" @click="undoManualSteps">Undo</ion-button>
           <ion-button expand="block" fill="outline" @click="restartCompletedRoute">Restart from entrance</ion-button>
         </div>
-        <p v-if="showIndoorHelp && walking.validationRequired.value" class="evidence-note" role="status">Step estimates are unverified on this phone. Use Confirm checkpoint, or open Walking sensor &amp; calibration.</p>
+        <p v-if="showIndoorHelp && walking.validationRequired.value" class="evidence-note" role="status">Step estimates are unverified on this phone. Use Manual Mode or open Walking sensor &amp; calibration.</p>
         <WalkingSensorCheck v-if="showIndoorHelp" :walking="walking" />
         <section v-if="showIndoorHelp" class="indoor-help">
           <template v-if="!navigation.paused">
             <div v-if="walkingUnavailable" class="walking-fallback" role="status">
               <p>{{ walkingMessage }}</p>
-              <ion-button fill="outline" @click="walking.start">Retry motion access</ion-button>
+              <ion-button v-if="walkingMode === 'automatic'" fill="outline" @click="setWalkingMode('automatic')">Retry motion access</ion-button>
             </div>
             <ion-button expand="block" fill="outline" class="lost" data-test="lost-way" @click="onLostWay">
               <ion-icon slot="start" :icon="helpCircleOutline" aria-hidden="true" />
@@ -278,22 +291,12 @@
       @didDismiss="onEntranceDismiss"
     />
 
-    <ion-alert css-class="navigation-alert" :is-open="showCheckpoint" header="Confirm physical checkpoint" :message="checkpointMessage" :backdrop-dismiss="false" :buttons="[{ text: 'Not yet', role: 'cancel' }, { text: 'I reached this checkpoint', role: 'confirm' }]" @didDismiss="onCheckpointDismiss" />
-    <ion-alert
-      css-class="navigation-alert arrival-alert"
-      :backdrop-dismiss="false"
-      :is-open="showArrival"
-      :header="simulationUsed ? 'TEST route complete' : 'Confirm destination'"
-      :message="arrivalMessage"
-      :buttons="[{ text: 'Not yet', role: 'cancel' }, { text: simulationUsed ? 'End test' : 'I am at the room', role: 'confirm' }]"
-      @didDismiss="onArrivalDismiss"
-    />
-
     <ArrivalFeedbackModal
       :is-open="showFeedback"
       :session-id="feedbackSessionId"
       :destination-id="destination?.id ?? null"
       :destination-name="destinationName"
+      :estimated-route-complete="stage === 'indoor'"
       @close="onFeedbackClose"
     />
   </ion-page>
@@ -355,10 +358,8 @@ import { startRearPreview, stopRearPreview } from '@/services/camera.service';
 import { LOCATION_MESSAGES } from '@/services/location.service';
 import {
   advanceInstruction,
-  arrivalInstruction,
   clearSelectedDestination,
   completeCurrentTurn,
-  confirmRouteCheckpoint,
   createTestNavigation,
   currentSegment,
   currentStep,
@@ -369,6 +370,7 @@ import {
   headingOffset,
   jumpToRightTurn,
   loadSelectedRoute,
+  moveBackward,
   moveForward,
   navigationInstruction,
   needsTurn,
@@ -412,16 +414,16 @@ const cameraReady = ref(false);
 const guidanceReady = ref(false);
 const cameraBusy = ref(false);
 const mapVisible = ref(false);
-const manualProgress = ref(false);
+const walkingMode = ref<'automatic' | 'manual'>('automatic');
+const manualStepHistory = ref<number[]>([]);
 const simulationUsed = ref(false);
-const showCheckpoint = ref(false);
-const checkpointMessage = computed(() => {
-  const step = currentStep(navigation.value);
-  return step ? `Confirm only after physically following instruction ${stepIndex.value + 1}: ${step.direction}, ${step.distance} m, and reaching its endpoint. The app cannot verify your indoor location.` : '';
-});
 const walking = useIndoorWalking(
   () => walkBlock.value,
-  (meters) => { navigation.value = moveForward(navigation.value, meters); },
+  (meters) => {
+    if (stage.value === 'indoor' && walkingMode.value === 'automatic') {
+      navigation.value = moveForward(navigation.value, meters);
+    }
+  },
   { diagnostics: SHOW_DEV_TOOLS,requireValidation:true },
 );
 const {
@@ -433,7 +435,6 @@ const {
 const walkingUnavailable = computed(() => !walkingEnabled.value && /unavailable|denied|No motion|stopped|Could not/.test(walkingMessage.value));
 const appActive = ref(true);
 
-const showArrival = ref(false);
 const {
   showFeedback,
   sessionId: feedbackSessionId,
@@ -522,14 +523,12 @@ const arrived = computed(() => hasArrived(navigation.value));
 const stepIndex = computed(() => currentStepIndex(navigation.value));
 const currentDirection = computed(() => currentStep(navigation.value)?.direction ?? 'straight');
 const modeLabel = computed(() => (isOutdoor.value ? 'OUTDOOR (GPS)' : 'INDOOR (fixed route)'));
-const arrivalMessage = computed(() => (
-  `${arrivalInstruction(navigation.value.destinationName)} Distance is estimated from your steps, so 1Locate cannot confirm you are at the room.`
-));
 /** Why detected steps cannot add distance right now; null while walking counts. */
 const walkBlock = computed(() => {
   if (!pageOpen.value) return 'page closed';
   if (preparing.value || mapVisible.value) return 'camera guidance is not active';
   if (stage.value !== 'indoor') return 'not on the indoor route';
+  if (walkingMode.value !== 'automatic') return 'manual mode active';
   if (wentBackground.value) return 'app was in background';
   return walkBlockReason(navigation.value, heading.value);
 });
@@ -576,7 +575,7 @@ const instruction = computed(() => {
   if (!isOutdoor.value) {
     if (!navigation.value.paused && heading.value == null && !arrived.value) {
       const step = currentStep(navigation.value);
-      return `Instruction ${stepIndex.value + 1}: ${step?.direction ?? 'straight'}, ${step?.distance ?? 0} m. Confirm the checkpoint when physically reached.`;
+      return `Instruction ${stepIndex.value + 1}: ${step?.direction ?? 'straight'}, ${step?.distance ?? 0} m. Follow this saved route segment.`;
     }
     if (!navigation.value.paused && navigation.value.forwardHeading == null) return navigationInstruction(navigation.value, heading.value);
     return navigationInstruction(navigation.value, heading.value);
@@ -681,8 +680,11 @@ watch([spokenGuidance, voiceSession], ([text]) => {
 
 watch(arrived, (isArrived, wasArrived) => {
   if (stage.value !== 'indoor') return;
-  if (isArrived && !wasArrived) { walking.stop(); clearAlignTimer(); }
-  if (!isArrived) showArrival.value = false;
+  if (isArrived && !wasArrived) {
+    walking.stop();
+    clearAlignTimer();
+    if (!simulationUsed.value) offerAfterArrival();
+  }
 });
 
 watch(
@@ -709,7 +711,6 @@ function confirmTurn() {
   if (stage.value !== 'indoor' || navigation.value.paused || !needsTurn(navigation.value)) return;
   clearAlignTimer();
   navigation.value = completeCurrentTurn(navigation.value);
-  manualProgress.value = true;
 }
 
 function syncTurnAlignment() {
@@ -760,14 +761,33 @@ function useMapGuidance() {
 function toggleMap() {
   if (!mapVisible.value && stage.value === 'indoor' && !arrived.value) onLostWay();
   mapVisible.value = !mapVisible.value;
-  if (!mapVisible.value && stage.value === 'indoor' && !navigation.value.paused && !arrived.value) void walking.start();
+  if (!mapVisible.value) startAutomaticWalking();
 }
-function onCheckpointDismiss(event: CustomEvent<{ role?: string }>) {
-  showCheckpoint.value = false;
-  if (event.detail.role !== 'confirm' || stage.value !== 'indoor') return;
-  clearAlignTimer(); walking.stop(); manualProgress.value = true;
-  navigation.value = confirmRouteCheckpoint(navigation.value);
-  if (!arrived.value && !navigation.value.paused && !mapVisible.value) void walking.start();
+function startAutomaticWalking() {
+  if (stage.value === 'indoor' && walkingMode.value === 'automatic'
+    && !navigation.value.paused && !arrived.value && !mapVisible.value && appActive.value) {
+    void walking.start();
+  }
+}
+function setWalkingMode(mode: 'automatic' | 'manual') {
+  if (stage.value !== 'indoor' || navigation.value.paused || arrived.value) return;
+  walkingMode.value = mode;
+  if (mode === 'manual') walking.stop();
+  else startAutomaticWalking();
+}
+function addManualSteps(steps: number) {
+  if (stage.value !== 'indoor' || walkingMode.value !== 'manual' || navigation.value.paused || arrived.value
+    || !Number.isInteger(steps) || steps <= 0) return;
+  const before = navigation.value.walkedMeters;
+  navigation.value = moveForward(navigation.value, steps * walkingStepLength.value);
+  const moved = navigation.value.walkedMeters - before;
+  if (moved > 0) manualStepHistory.value.push(moved);
+}
+function undoManualSteps() {
+  if (stage.value !== 'indoor' || walkingMode.value !== 'manual' || navigation.value.paused
+    || manualStepHistory.value.length === 0) return;
+  const meters = manualStepHistory.value.pop();
+  if (meters != null) navigation.value = moveBackward(navigation.value, meters);
 }
 function restartCompletedRoute() {
   if (stage.value !== 'indoor') return;
@@ -838,8 +858,10 @@ function enterIndoor() {
   turnAlignment.value = 'not a turn';
   confirmingRestart.value = false;
   stage.value = 'indoor';
+  walkingMode.value = 'automatic';
+  manualStepHistory.value = [];
   initializeForward();
-  void walking.start();
+  startAutomaticWalking();
 }
 
 /** The indoor route starts only after the user confirms they are at the entrance. */
@@ -869,18 +891,19 @@ function onResume() {
   confirmingRestart.value = false;
   navigation.value = resumeNavigation(navigation.value);
   initializeForward();
-  void walking.start();
+  startAutomaticWalking();
 }
 
 function onRestartConfirmed() {
   clearAlignTimer();
   confirmingRestart.value = false;
-  showArrival.value = false;
   beginFeedbackSession();
+  manualStepHistory.value = [];
+  walkingMode.value = 'automatic';
   turnAlignment.value = 'not a turn';
   navigation.value = restartFromEntrance(navigation.value, true);
   initializeForward();
-  void walking.start();
+  startAutomaticWalking();
 }
 
 function chooseAnotherDestination() {
@@ -890,7 +913,6 @@ function chooseAnotherDestination() {
   clearSelectedDestination();
   confirmingRestart.value = false;
   showEntrance.value = false;
-  showArrival.value = false;
   showFeedback.value = false;
   turnAlignment.value = 'not a turn';
   navigation.value = resetNavigation(navigation.value);
@@ -950,9 +972,12 @@ function onReset() {
   }
   clearAlignTimer();
   navigation.value = resetNavigation(navigation.value);
-  showArrival.value = false;
   beginFeedbackSession();
+  manualStepHistory.value = [];
+  walkingMode.value = 'automatic';
   turnAlignment.value = 'not a turn';
+  initializeForward();
+  startAutomaticWalking();
 }
 
 function formatHeading(value: number): string {
@@ -970,15 +995,6 @@ function formatCoordinate(value: number | null | undefined): string {
   return value == null ? 'unavailable' : value.toFixed(6);
 }
 
-async function onArrivalDismiss(event: CustomEvent<{ role?: string }>) {
-  showArrival.value = false;
-  if (event.detail.role !== 'confirm' || !destination.value || !arrived.value) return;
-  if (simulationUsed.value) { chooseAnotherDestination(); return; }
-  confirmRoomArrival(destination.value);
-  await endSession();
-  offerAfterArrival();
-}
-
 function onFeedbackClose(message?: string) {
   closeFeedback();
   if (message) {
@@ -987,12 +1003,11 @@ function onFeedbackClose(message?: string) {
       .then((toast) => toast.present())
       .catch(() => undefined);
   }
-  ionRouter.replace('/arrival');
+  if (stage.value !== 'indoor') ionRouter.replace('/arrival');
 }
 
 function endSession() {
   navigationSession += 1;
-  showCheckpoint.value = false;
   showFeedback.value = false;
   walking.stop();
   clearAlignTimer();
@@ -1014,12 +1029,13 @@ onIonViewDidEnter(async () => {
     return;
   }
   preparing.value = true; routeReady.value = true; cameraReady.value = false; guidanceReady.value = false;
-  mapVisible.value = false; manualProgress.value = false; simulationUsed.value = false;
+  mapVisible.value = false; simulationUsed.value = false;
   destination.value = selected;
   navigation.value = indoor;
   stage.value = 'outdoor';
+  walkingMode.value = 'automatic';
+  manualStepHistory.value = [];
   beginFeedbackSession();
-  showArrival.value = false;
   showEntrance.value = false;
   turnAlignment.value = 'not a turn';
   confirmingRestart.value = false;
@@ -1564,7 +1580,7 @@ ion-alert.arrival-alert .alert-button-group .alert-button .alert-button-inner { 
 .navigation-layout .camera-frame { position: absolute; inset: 0; min-height: 0; margin: 0; height: 100%; }
 .navigation-layout > .sheet:first-of-type { z-index: 2; position: relative; margin: 8px 12px; border-radius: 16px; background: #f5faffeb; }
 .navigation-layout .guidance-sheet { position: absolute; z-index: 3; bottom: 0; left: 0; right: 0; max-height: 43%; overflow-y: auto; padding: 12px 16px max(10px, env(safe-area-inset-bottom)); }
-.navigation-layout .journey-card { padding: 0; }.journey-pin { width: 34px; height: 34px; }.journey-identity h2 { font-size: 16px; }.journey-instruction { margin-top: 7px; padding-top: 6px; }.navigation-controls { display: flex; flex-wrap: wrap; justify-content: center; gap: 2px; margin-top: 6px; }.navigation-controls ion-button { font-size: 11px; min-height: 34px; text-transform: none; }.evidence-note { margin: 4px 0; font-size: 10px; color: #526b82; }.simulation-notice { position: relative; z-index: 5; padding: 8px; background: #fff2c9; color: #724500; text-align: center; font-weight: 700; font-size: 12px; }.route-complete p { font-size: 12px; }
+.navigation-layout .journey-card { padding: 0; }.journey-pin { width: 34px; height: 34px; }.journey-identity h2 { font-size: 16px; }.journey-instruction { margin-top: 7px; padding-top: 6px; }.navigation-controls { display: flex; flex-wrap: wrap; justify-content: center; gap: 2px; margin-top: 6px; }.navigation-controls ion-button { font-size: 11px; min-height: 34px; text-transform: none; }.evidence-note { margin: 4px 0; font-size: 10px; color: #526b82; }.simulation-notice { position: relative; z-index: 5; padding: 8px; background: #fff2c9; color: #724500; text-align: center; font-weight: 700; font-size: 12px; }.route-complete h2 { margin: 8px 0 2px; font-size: 20px; text-align: center; color: #0c2d52; }.route-complete p { font-size: 12px; text-align: center; }.route-complete .completion-destination { margin: 0; font-size: 16px; font-weight: 700; }.route-complete .accuracy-note { color: #526b82; }
 </style>
 
 <style scoped>
@@ -1588,6 +1604,13 @@ ion-alert.arrival-alert .alert-button-group .alert-button .alert-button-inner { 
 .navigation-controls ion-button { margin:0;min-width:0;min-height:44px;height:auto;font-size:11px;letter-spacing:0;text-transform:none;--border-radius:10px;--padding-start:5px;--padding-end:5px;--border-color:#c4d5e9;--color:#215b94; }
 .navigation-controls ion-button[fill=solid] { --background:#2161db;--color:white; }
 .navigation-controls .stop-action { --color:#a63842;--border-color:#e6cdd1; }
+.step-controls { margin-top:8px;padding:8px;border:1px solid #d5e1ed;border-radius:12px;background:#fff; }
+.step-controls p { margin:4px 0;text-align:center;color:#526b82;font-size:11px;line-height:1.4; }
+.mode-controls,.manual-step-controls { display:flex;justify-content:center;flex-wrap:wrap;gap:6px; }
+.step-controls ion-button { margin:0;min-height:40px;font-size:11px;text-transform:none;--border-radius:10px; }
+.step-controls ion-button[fill=solid] { --background:#2161db;--color:white; }
+.route-complete { margin-top:8px;padding:10px;border:1px solid #d5e1ed;border-radius:12px;background:#fff; }
+.route-complete ion-button { min-height:42px;font-size:12px;text-transform:none; }
 .route-details { margin-top:10px;border-top:1px solid #dce6f0;padding-top:8px;color:#60758a;font-size:11px; }
 .route-details summary { cursor:pointer;min-height:28px;line-height:28px; }
 .route-details summary span { float:right;background:#edf2f8;color:#36546c;border-radius:6px;padding:0 7px;font-size:10px;line-height:24px; }

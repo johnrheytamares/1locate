@@ -1,8 +1,10 @@
 <template>
   <div v-if="isOpen" class="feedback-scrim" role="dialog" aria-modal="true" aria-labelledby="arrival-feedback-title">
     <form class="feedback-card" data-test="arrival-feedback" @submit.prevent="onSubmit">
-      <h2 id="arrival-feedback-title">You've Arrived! 🎉</h2>
-      <p class="lead">You've successfully reached your destination. How was your navigation experience?</p>
+      <h2 id="arrival-feedback-title">{{ estimatedRouteComplete ? 'You Reached Your Destination!' : "You've Arrived! 🎉" }}</h2>
+      <p v-if="estimatedRouteComplete" class="completion-destination">{{ destinationName }}</p>
+      <p v-if="estimatedRouteComplete" class="accuracy-note">Route completed based on estimated walking progress. Please check the room sign.</p>
+      <p class="lead">{{ estimatedRouteComplete ? 'Share feedback about your navigation experience.' : "You've successfully reached your destination. How was your navigation experience?" }}</p>
 
       <fieldset class="stars" :disabled="busy">
         <legend>Star rating</legend>
@@ -67,6 +69,7 @@ const props = defineProps<{
   sessionId: string;
   destinationId: string | null;
   destinationName: string;
+  estimatedRouteComplete?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -141,6 +144,22 @@ h2 {
   font-weight: 800;
   line-height: 1.3;
   color: #0c2d52;
+}
+
+.completion-destination {
+  margin: 0 0 4px;
+  text-align: center;
+  color: #12263f;
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.accuracy-note {
+  margin: 0 0 14px;
+  text-align: center;
+  color: #526b82;
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .lead {

@@ -152,6 +152,21 @@ describe('Arrival feedback modal', () => {
     expect(wrapper.emitted('close')?.[0]).toEqual([service.FEEDBACK_SAVED_MESSAGE]);
   });
 
+  test('estimated route completion identifies the destination and still submits to Admin feedback storage', async () => {
+    const wrapper = mount(ArrivalFeedbackModal, { props: { ...props, estimatedRouteComplete: true } });
+    expect(wrapper.text()).toContain('You Reached Your Destination!');
+    expect(wrapper.find('.completion-destination').text()).toBe('Library');
+    expect(wrapper.text()).toContain('Route completed based on estimated walking progress. Please check the room sign.');
+    expect(wrapper.text()).not.toContain("You've successfully reached your destination.");
+    await wrapper.find('[data-test="rating-5"]').trigger('click');
+    await wrapper.find('form').trigger('submit');
+    await flushPromises();
+    expect(mocks.insert).toHaveBeenCalledWith('navigation_feedback', expect.objectContaining({
+      destination_name: 'Library',
+      rating: 5,
+    }));
+  });
+
   test('Maybe Later closes without submitting or showing an error', async () => {
     const wrapper = mount(ArrivalFeedbackModal, { props });
     await wrapper.find('[data-test="maybe-later"]').trigger('click');

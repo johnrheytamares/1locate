@@ -3,8 +3,8 @@
 <p>Sensor: <strong>{{ stepMethodLabel(activeMethod || walking.sensorMethod.value) }}</strong> · {{ walking.trackingState.value }}</p>
 <p>{{ walking.rawEvents.value }} raw events · {{ walking.detectedSteps.value }} detected · {{ walking.creditedSteps.value }} credited · {{ walking.estimatedMeters.value.toFixed(1) }} m estimated</p>
 <p role="status">{{ message || walking.message.value }}</p>
-<p>Steps cannot prove that you moved or followed the correct hallway. If shaking changes the count, use checkpoints.</p>
-<button type="button" @click="unreliable">Use checkpoints / report unreliable steps</button>
+<p>Steps cannot prove that you moved or followed the correct hallway. If shaking changes the count, switch to manual step entry.</p>
+<button type="button" @click="unreliable">Disable automatic estimates</button>
 <p>Check this phone on a measured path. Calibration does not advance your route. Return to the route entrance afterward.</p>
 <label>Measured walking distance (m)<input v-model.number="distance" type="number" min="5" max="100" :disabled="running || stage !== 0" /></label>
 <label>Independently counted walking steps<input v-model.number="independent" type="number" min="8" step="1" :disabled="running" /></label>

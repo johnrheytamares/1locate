@@ -58,9 +58,9 @@ function snapshotFrom(destination: Destination): NavigationSnapshot {
   };
 }
 
-/** Route progress only moves after Set Forward, and never while guidance is paused. */
+/** Route progress never moves while guidance is paused. */
 function canProgress(state: NavigationSnapshot): boolean {
-  return state.forwardHeading != null && !state.paused;
+  return !state.paused;
 }
 
 export function getDestinations(): Destination[] {
@@ -339,13 +339,19 @@ function routeInstruction(state: NavigationSnapshot): string {
 }
 
 export function updateRouteProgress(state: NavigationSnapshot, meters = 1): NavigationSnapshot {
-  if (!canProgress(state)) return state;
-  const walkedMeters = Math.min(progressLimit(state), state.walkedMeters + meters);
+  if (!canProgress(state) || !Number.isFinite(meters) || meters <= 0) return state;
+  const walkedMeters = Math.min(progressLimit(state), totalMeters(state), state.walkedMeters + meters);
   return { ...state, walkedMeters };
 }
 
 export function moveForward(state: NavigationSnapshot, meters = 1): NavigationSnapshot {
   return updateRouteProgress(state, meters);
+}
+
+/** Reverses estimated route progress without changing the saved route or its turn guidance. */
+export function moveBackward(state: NavigationSnapshot, meters: number): NavigationSnapshot {
+  if (state.paused || !Number.isFinite(meters) || meters <= 0) return state;
+  return { ...state, walkedMeters: Math.max(0, state.walkedMeters - meters) };
 }
 
 /** Skip to the start of the next route step. */

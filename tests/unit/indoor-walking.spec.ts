@@ -60,6 +60,19 @@ describe('walking distance', () => {
     vi.stubGlobal('localStorage', { getItem: () => 'invalid' });
     expect(useIndoorWalking(() => null, vi.fn()).stepLength.value).toBe(0.7);
   });
+  it('uses the saved validated stride for manual step estimates', () => {
+    const profile = {
+      version: 1,
+      profile: { version: 1, method: 'motion-estimate', distance: 10, steps: 20, stride: 0.5, calibratedAt: new Date().toISOString() },
+      independentSteps: 20,
+      checks: ['standing', 'rotating', 'shaking'].map(activity => ({ activity, durationMs: 15000, steps: 0 })),
+    };
+    vi.stubGlobal('localStorage', {
+      getItem: (key: string) => key === '1locate.walking-validation.v1' ? JSON.stringify(profile) : null,
+    });
+    const walking = useIndoorWalking(() => null, vi.fn());
+    expect(walking.stepLength.value).toBe(0.5);
+  });
   it('calibrates using a measured distance and whole step count', () => {
     expect(calibratedStepLength(10, 16)).toBe(0.625);
     for (const [distance, steps] of [[0, 10], [10, 0], [10, 1.5], [Infinity, 10], [100, 10]]) {

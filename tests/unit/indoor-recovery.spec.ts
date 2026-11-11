@@ -97,6 +97,7 @@ const {
   guideArrows,
   jumpToRightTurn,
   loadSelectedRoute,
+  moveBackward,
   moveForward,
   navigationInstruction,
   pauseNavigation,
@@ -129,12 +130,23 @@ function checkedMotionPhone(){
 }
 
 describe('indoor route progress', () => {
-  test('does not move before Set Forward', () => {
+  test('route distance progresses without a compass heading and stops at turn boundaries', () => {
     selectDestination('registrar');
     const route = loadSelectedRoute()!;
-    expect(updateRouteProgress(route, 2).walkedMeters).toBe(0);
-    expect(advanceInstruction(route).walkedMeters).toBe(0);
+    expect(updateRouteProgress(route, 2).walkedMeters).toBe(2);
+    expect(updateRouteProgress(route, 100).walkedMeters).toBe(3);
     expect(navigationInstruction(route, 0)).toBe('Turn right ahead');
+  });
+
+  test('automatic and manual distance progress completes the saved route and can be undone', () => {
+    selectDestination('registrar');
+    let route = loadSelectedRoute()!;
+    route = updateRouteProgress(route, 3);
+    route = completeCurrentTurn(route);
+    route = updateRouteProgress(route, 10);
+    expect(route.walkedMeters).toBe(7);
+    expect(moveForward(route, 10).walkedMeters).toBe(7);
+    expect(moveBackward(route, 10).walkedMeters).toBe(0);
   });
 });
 
@@ -174,7 +186,7 @@ describe('"I lost my way"', () => {
     expect(updateRouteProgress(resumed, 1).walkedMeters).toBe(3);
   });
 
-  test('restarting needs entrance confirmation, then resets progress and Set Forward', () => {
+  test('restarting needs entrance confirmation, then resets estimated route progress', () => {
     const paused = pauseNavigation(walkedRoute());
 
     expect(restartFromEntrance(paused, false)).toBe(paused);
@@ -185,7 +197,7 @@ describe('"I lost my way"', () => {
     expect(restarted.paused).toBe(false);
     expect(restarted.destinationId).toBe('registrar');
     expect(navigationInstruction(restarted, 90)).toBe('Turn right ahead');
-    expect(updateRouteProgress(restarted, 2).walkedMeters).toBe(0);
+    expect(updateRouteProgress(restarted, 2).walkedMeters).toBe(2);
     expect(updateRouteProgress(setForwardHeading(restarted, 10), 2).walkedMeters).toBe(2);
   });
 
@@ -365,6 +377,17 @@ describe('Camera Navigation distance', () => {
   }
   const moveForwardButton = () => wrapper!.find('[data-test="move-forward"]');
   const distance = () => wrapper!.find('[data-test="journey-distance"]').text();
+  const manualSteps = (count: 1 | 5) => wrapper!.find(`[data-test="manual-step-${count}"]`);
+  const turnButton = () => wrapper!.findAll('ion-button').find(item => item.text().trim() === 'I completed the turn')!;
+
+  async function completeManualRoute() {
+    await wrapper!.find('[data-test="manual-mode"]').trigger('click');
+    await manualSteps(5).trigger('click');
+    await turnButton().trigger('click');
+    await manualSteps(5).trigger('click');
+    await manualSteps(1).trigger('click');
+    await flushPromises();
+  }
 
   test('rotating the phone does not confirm an indoor junction; explicit turn confirmation preserves remaining distance', async () => {
     await enterIndoorDev();
@@ -394,63 +417,96 @@ describe('Camera Navigation distance', () => {
     expect(distance()).toBe('Est. remaining: 3 m');
   });
 
-  test('the estimated arrival alert does not claim the user is at the room', async () => {
-    await enterIndoorDev();
-    for (let index = 0; index < 3; index += 1) await moveForwardButton().trigger('click');
-    mocks.heading?.(180);
-    await flushPromises();
-    await new Promise((resolve) => setTimeout(resolve, TURN_ALIGNMENT_HOLD_MS + 100));
-    await wrapper!.findAll('ion-button').find(b=>b.text().trim()==='I completed the turn')!.trigger('click');
-    for (let index = 0; index < 4; index += 1) await moveForwardButton().trigger('click');
-    await flushPromises();
-    expect(wrapper!.findAllComponents(IonAlert).some(alert=>alert.props('isOpen')&&alert.props('header')==='TEST route complete')).toBe(false);
-    await wrapper!.find('.route-complete ion-button').trigger('click');await flushPromises();
-    const arrival = wrapper!.findAllComponents(IonAlert).find((alert) => alert.props('isOpen') && alert.props('header') === 'TEST route complete');
-    expect(arrival).toBeDefined();
-    expect(arrival!.props('message')).toContain('cannot confirm you are at the room');
-    expect(arrival!.props('message')).not.toMatch(/you have reached/i);
-    arrival!.vm.$emit('didDismiss', new CustomEvent('ionAlertDidDismiss', { detail: { role: 'confirm' } }));
-    await flushPromises();
-    expect(mocks.replace).toHaveBeenCalledWith('/destinations');
-    const { getArrival } = await import('@/services/journey.service');
-    expect(getArrival()).toBeNull();
-  });
-
-  test('the feedback popup appears once, only after the arrival message is dismissed', async () => {
-    const { beginJourney } = await import('@/services/journey.service');
-    beginJourney('registrar');
+  test('manual steps complete the route, open feedback once, and undo does not reopen feedback', async () => {
+    const { beginJourney, clearJourney, getArrival } = await import('@/services/journey.service');
+    clearJourney();
     mocks.gpsSource = 'real';
+    beginJourney('registrar');
     await enterIndoorDev();
     const feedback = () => wrapper!.find('[data-test="arrival-feedback"]');
     expect(feedback().exists()).toBe(false);
-    // Physical checkpoint confirmations are real progress; debug buttons mark a test journey.
-    for (let index = 0; index < 3; index += 1) {
-      const button = wrapper!.findAll('ion-button').find(item => item.text().trim() === 'Confirm checkpoint');
-      expect(button).toBeDefined();
-      await button!.trigger('click');
-      const checkpoint = wrapper!.findAllComponents(IonAlert).find(alert => alert.props('header') === 'Confirm physical checkpoint');
-      checkpoint!.vm.$emit('didDismiss', new CustomEvent('ionAlertDidDismiss', { detail: { role: 'confirm' } }));
-      await flushPromises();
-    }
-
-    expect(feedback().exists()).toBe(false);
+    await completeManualRoute();
     expect(wrapper!.find('.route-complete').exists()).toBe(true);
-    await wrapper!.find('.route-complete ion-button').trigger('click');await flushPromises();
-    const arrival = wrapper!.findAllComponents(IonAlert).find((alert) => alert.props('isOpen') && alert.props('header') === 'Confirm destination')!;
-    expect(arrival).toBeDefined();
-    arrival.vm.$emit('didDismiss', new CustomEvent('ionAlertDidDismiss', { detail: { role: 'confirm' } }));
-    await flushPromises();
+    expect(wrapper!.find('.route-complete h2').text()).toBe('You Reached Your Destination!');
+    expect(wrapper!.find('.completion-destination').text()).toBe('Registrar Office');
+    expect(wrapper!.find('.accuracy-note').text()).toBe('Route completed based on estimated walking progress. Please check the room sign.');
+    expect(wrapper!.findAllComponents(IonAlert).some(alert => alert.props('isOpen') && /destination|checkpoint/i.test(String(alert.props('header'))))).toBe(false);
     expect(feedback().exists()).toBe(true);
-    expect(mocks.replace).not.toHaveBeenCalledWith('/destinations');
 
     await wrapper!.find('[data-test="maybe-later"]').trigger('click');
     await flushPromises();
     expect(feedback().exists()).toBe(false);
-    expect(mocks.replace).toHaveBeenCalledWith('/arrival');
-
-    arrival.vm.$emit('didDismiss', new CustomEvent('ionAlertDidDismiss', { detail: { role: 'confirm' } }));
+    expect(mocks.replace).not.toHaveBeenCalledWith('/arrival');
+    expect(getArrival()).toBeNull();
+    await wrapper!.find('[data-test="undo-completion"]').trigger('click');
+    expect(wrapper!.find('.route-complete').exists()).toBe(false);
+    await manualSteps(5).trigger('click');
     await flushPromises();
     expect(feedback().exists()).toBe(false);
+  });
+
+  test('accepted automatic sensor steps complete the route and open feedback', async () => {
+    checkedMotionPhone();
+    vi.stubGlobal('DeviceMotionEvent', class {});
+    mocks.gpsSource = 'real';
+    await enterIndoorDev();
+
+    const clock = vi.spyOn(performance, 'now');
+    let timestamp = 10_000;
+    const sample = (x: number) => {
+      const event = new Event('devicemotion');
+      Object.defineProperty(event, 'acceleration', { value: { x, y: 0, z: 0 } });
+      window.dispatchEvent(event);
+    };
+    const steps = (count: number) => {
+      for (let index = 0; index < count; index += 1) {
+        clock.mockReturnValue(timestamp); sample(0);
+        clock.mockReturnValue(timestamp + 20); sample(2);
+        clock.mockReturnValue(timestamp + 100); sample(0);
+        timestamp += 500;
+      }
+    };
+
+    steps(5);
+    await flushPromises();
+    expect(distance()).toBe('Est. remaining: 4 m');
+    await turnButton().trigger('click');
+    steps(6);
+    await flushPromises();
+    clock.mockRestore();
+
+    expect(wrapper!.find('.route-complete h2').text()).toBe('You Reached Your Destination!');
+    expect(wrapper!.find('[data-test="arrival-feedback"]').exists()).toBe(true);
+    expect(wrapper!.findAllComponents(IonAlert).some(alert => alert.props('isOpen') && /destination|checkpoint/i.test(String(alert.props('header'))))).toBe(false);
+    vi.unstubAllGlobals();
+  });
+
+  test('switching to manual stops sensor counting and automatic mode can be resumed', async () => {
+    checkedMotionPhone();
+    vi.stubGlobal('DeviceMotionEvent', class {});
+    mocks.gpsSource = 'real';
+    await enterIndoorDev();
+    expect(wrapper!.find('[data-test="walking-diagnostics"]').text()).toContain('Motion: listening');
+
+    await wrapper!.find('[data-test="manual-mode"]').trigger('click');
+    expect(wrapper!.find('[data-test="walking-diagnostics"]').text()).toContain('Motion: off');
+    expect(wrapper!.find('[data-test="manual-step-1"]').exists()).toBe(true);
+
+    await wrapper!.find('[data-test="automatic-mode"]').trigger('click');
+    await flushPromises();
+    expect(wrapper!.find('[data-test="walking-diagnostics"]').text()).toContain('Motion: listening');
+    expect(wrapper!.find('[data-test="manual-step-1"]').exists()).toBe(false);
+    vi.unstubAllGlobals();
+  });
+
+  test('paused navigation cannot progress through manual or debug step controls', async () => {
+    await enterIndoorDev();
+    await wrapper!.find('[data-test="manual-mode"]').trigger('click');
+    const before = distance();
+    await wrapper!.find('[data-test="lost-way"]').trigger('click');
+    expect(wrapper!.find('[data-test="manual-step-5"]').exists()).toBe(false);
+    await moveForwardButton().trigger('click');
+    expect(distance()).toBe(before);
   });
 
   test('no feedback popup while still navigating or after leaving early', async () => {
@@ -465,7 +521,7 @@ describe('Camera Navigation distance', () => {
     vi.stubGlobal('DeviceMotionEvent', class {});
     await enterIndoorDev();
     const panel = () => wrapper!.find('[data-test="walking-diagnostics"]').text();
-    expect(panel()).toContain('Step Length: 0.70 m (default)');
+    expect(panel()).toContain('Step Length: 0.70 m (saved)');
     expect(panel()).toContain('Walking Blocked: no');
     expect(panel()).toContain('Arrival Trigger: estimated walked ≥ route length (not met)');
 

@@ -1,4 +1,4 @@
-import {readWalkingValidation,clearWalkingValidation} from '@/services/walking-validation';
+import {readWalkingValidation,readSavedWalkingStride,clearWalkingValidation} from '@/services/walking-validation';
 import type {IndoorMeasurement} from '../../shared/indoor-tracking';
 import { WalkingPulseDetector, stepMethodLabel } from '../../shared/indoor-tracking';
 import { reactive, ref } from 'vue';
@@ -63,13 +63,13 @@ export function useIndoorWalking(
   const enabled = ref(false);
   const sensorMethod=ref<IndoorMeasurement|null>(null),rawEvents=ref(0),detectedSteps=ref(0),creditedSteps=ref(0),estimatedMeters=ref(0),trackingState=ref('stopped'),validationRequired=ref(false);
   function credit(steps:number,method:IndoorMeasurement){
-    if(!Number.isInteger(steps)||steps<=0||steps>100){reportUnreliable();message.value='Unexpected sensor step batch. Use checkpoint navigation and repeat this phone’s walking check.';return;}
+    if(!Number.isInteger(steps)||steps<=0||steps>100){reportUnreliable();message.value='Unexpected sensor step batch. Use manual steps and repeat this phone’s walking check.';return;}
     sensorMethod.value=method;detectedSteps.value+=steps;
-    if(options.requireValidation){const verified=readWalkingValidation(method);if(!verified){validationRequired.value=true;trackingState.value='checkpoint only';if(diagnostics)diagnostics.lastReason='unverified sensor events: checkpoint only';message.value='Step events are unverified. Complete this phone’s walking check or use manual checkpoints. Shaking can trigger sensor events.';return;}stepLength.value=verified.profile.stride;stepLengthSource='saved';if(diagnostics)diagnostics.stepLengthSource='saved';validationRequired.value=false;}
+    if(options.requireValidation){const verified=readWalkingValidation(method);if(!verified){validationRequired.value=true;trackingState.value='manual steps';if(diagnostics)diagnostics.lastReason='unverified sensor events';message.value='Step events are unverified. Complete this phone’s walking check or use manual steps. Shaking can trigger sensor events.';return;}stepLength.value=verified.profile.stride;stepLengthSource='saved';if(diagnostics)diagnostics.stepLengthSource='saved';validationRequired.value=false;}
     trackingState.value='estimated walking';creditedSteps.value+=steps;estimatedMeters.value+=steps*stepLength.value;
     if(diagnostics)diagnostics.acceptedSteps+=steps;onStep(steps*stepLength.value);
   }
-  function reportUnreliable(){stop();clearWalkingValidation();validationRequired.value=true;trackingState.value='checkpoint only';message.value='Automatic estimates disabled for this phone. Use physical checkpoints; repeat the walking check before enabling estimates.';}
+  function reportUnreliable(){stop();clearWalkingValidation();validationRequired.value=true;trackingState.value='manual steps';message.value='Automatic estimates disabled for this phone. Use manual steps; repeat the walking check before enabling estimates.';}
 
   const message = ref('Automatic walking is ready. Default step length is 0.70 m; personal calibration is optional.');
   let stepLengthSource: WalkingDiagnostics['stepLengthSource'] = 'default';
@@ -89,6 +89,11 @@ export function useIndoorWalking(
       stepLengthSource = 'saved';
     }
   } catch { /* Calibration still works when storage is unavailable. */ }
+  const validatedStride = readSavedWalkingStride();
+  if (validatedStride != null) {
+    stepLength.value = validatedStride;
+    stepLengthSource = 'saved';
+  }
 
   const diagnostics = options.diagnostics
     ? reactive<WalkingDiagnostics>({
@@ -225,18 +230,18 @@ export function useIndoorWalking(
             }
             credit(steps,method);
           },
-          status => {if(request!==generation)return;if(status==='paused'){stop();message.value='Sensor paused in the background. Resume at the same checkpoint.';}else if(!validationRequired.value)message.value=status;},
+          status => {if(request!==generation)return;if(status==='paused'){stop();message.value='Sensor paused in the background. Resume at the same route position.';}else if(!validationRequired.value)message.value=status;},
           sample=>{if(request===generation){rawEvents.value++;if(sample.method)sensorMethod.value=sample.method;}},
         );
         if (request !== generation) return;
         sensorMethod.value=method;validationRequired.value=!!options.requireValidation&&!readWalkingValidation(method);
-        trackingState.value=validationRequired.value?'checkpoint only':'observing steps';
-        message.value=validationRequired.value?'This sensor is not yet checked on this phone. Use manual checkpoints or complete the walking check.':`${stepMethodLabel(method)} active. Step events estimate distance; they do not prove movement or hallway position.`;
+        trackingState.value=validationRequired.value?'manual steps':'observing steps';
+        message.value=validationRequired.value?'This sensor is not yet checked on this phone. Use manual steps or complete the walking check.':`${stepMethodLabel(method)} active. Step events estimate distance; they do not prove movement or hallway position.`;
         return;
       } catch (error) {
         if (request !== generation) return;
         enabled.value = false;
-        message.value = `${error instanceof Error ? error.message : 'Android step sensor unavailable.'} Use manual checkpoints or retry.`;
+        message.value = `${error instanceof Error ? error.message : 'Android step sensor unavailable.'} Use manual steps or retry.`;
         return;
       }
     }

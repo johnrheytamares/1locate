@@ -13,9 +13,9 @@ test('student hardware steps need no browser motion or admin stride and stop imm
  walking.stop();event(4,'hardware-detector');expect(accepted).toHaveBeenCalledTimes(1);
  blocked=null;await walking.start();mocks.start.mock.calls[1][0](1,'hardware-detector');expect(accepted).toHaveBeenLastCalledWith(0.5);walking.stop();
 });
-test('a denied native step permission offers manual checkpoints without fake progress',async()=>{
+test('a denied native step permission offers manual steps without fake progress',async()=>{
  mocks.start.mockRejectedValue(new Error('Physical activity permission denied.'));const step=vi.fn(),walking=useIndoorWalking(()=>null,step);await walking.start();
- expect(walking.enabled.value).toBe(false);expect(walking.message.value).toContain('manual checkpoints');expect(step).not.toHaveBeenCalled();walking.stop();
+ expect(walking.enabled.value).toBe(false);expect(walking.message.value).toContain('manual steps');expect(step).not.toHaveBeenCalled();walking.stop();
 });
 
 
